@@ -164,7 +164,7 @@ class GameLogic:
 		if move.profiles[0] == MoveProfile.SURRENDER:
 			output.append(self.players[0].player_type)
 		if move.profiles[1] == MoveProfile.SURRENDER:
-			output.append(self.players[0].player_type)
+			output.append(self.players[1].player_type)
 		
 		if len(output) > 0:
 			return output
@@ -206,6 +206,9 @@ class GameLogic:
 				if player.position == bullet.position:
 					# hit
 					output.append(player.player_type)
+
+		# Eliminate duplicates:
+		out = list(dict.fromkeys(out))
 		
 		return output
 
