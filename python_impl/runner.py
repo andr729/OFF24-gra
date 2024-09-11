@@ -1,5 +1,6 @@
 
-# File contains Game class which is responsible for simulating the game played with two "exec" players
+# File containing Game class which is responsible for simulating
+# the game played by two "exec" players
 
 import subprocess
 import shutil

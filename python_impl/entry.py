@@ -1,3 +1,7 @@
+# Implementation of two entry points:
+# - simple 1v1 entry point
+# - Tournament entry point
+
 import os
 import time
 

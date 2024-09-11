@@ -1,4 +1,4 @@
-# Implementation of the game runner for the OFF24 game.
+# Implementation of the game logic
 
 import random
 from dataclasses import dataclass
