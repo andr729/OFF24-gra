@@ -1,10 +1,13 @@
+# This script might be broken for now. It will be fixed in the future.
+
+from internal.utils import runWithArgs
 
 import os
 import time
 import subprocess
+from dataclasses import dataclass
 
-def runWithDefault(red, blue):
-
+def runWithTournamentDefaults(red, blue):
 	# LOL:
 	args = lambda x:x
 
@@ -56,25 +59,8 @@ def getUsers(solutions, compile = True):
 
 
 def main():
-
 	solutions = grabFiles()
 	users = getUsers(solutions, compile=False)
-
-	# return
-
-	for i in range(len(users)):
-		print(i, " :=", users[i])
-
-	# return 
-
-	runWithDefault(users[2].exec, users[4].exec)
-
-	return
-
-
-	runWithDefault()
-
-	return 0
 
 	round_count = 3
 
@@ -101,7 +87,7 @@ def main():
 				time.sleep(1)
 
 				try:
-					out = runWithDefault(users[i].exec, users[j].exec)
+					out = runWithTournamentDefaults(users[i].exec, users[j].exec)
 				except:
 					print("Ow no...")
 					exit(1)
@@ -150,11 +136,6 @@ def main():
 
 			time.sleep(6)
 				
-	
-	# arg_parser = getArgParser()
-	# args = arg_parser.parse_args()
-
-	# runWithArgs(args)
 
 
 if __name__ == "__main__":

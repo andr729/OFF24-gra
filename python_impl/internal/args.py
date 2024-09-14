@@ -1,5 +1,3 @@
-# Implementation of the arguments parser used by "entry"
-
 import argparse
 
 # Following class is a code from: https://stackoverflow.com/questions/12151306/argparse-way-to-include-default-values-in-help
