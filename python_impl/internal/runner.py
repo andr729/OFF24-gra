@@ -86,4 +86,3 @@ class Game:
 		self.round_number += 1
 		
 		return out
-
