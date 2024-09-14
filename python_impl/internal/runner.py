@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from .logic import *
 
-RUN_IN_ISOLATE = True
+RUN_IN_ISOLATE = False
 
 class Game:
 	def __init__(self, n: int, m: int, wall_count: int, red_player_exec: str, blue_player_exec: str, seed = None):

@@ -165,7 +165,7 @@ class GameLogic:
 					output.append(player.player_type)
 
 		# Eliminate duplicates:
-		out = list(dict.fromkeys(out))
+		output = list(dict.fromkeys(output))
 		
 		return output
 
