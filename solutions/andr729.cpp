@@ -4,11 +4,22 @@
 
 using u64 = uint64_t;
 
-constexpr u64 N = 15;
-constexpr u64 M = 20;
+// constexpr u64 N = 15;
+// constexpr u64 M = 20;
+
+/*******************/
+// Global parameters:
+
+u64 n;
+u64 m;
 
 constexpr u64 MAX_ROUND = 400;
 u64 round_number;
+
+constinit bool global_params_set = false;
+
+/*******************/
+
 
 struct Pos {
 	u64 x = 0;
@@ -33,15 +44,22 @@ struct QuadDirStorage {
 	}
 };
 
+void skipNewLine() {
+	char c;
+	std::cin >> std::noskipws >> c;
+	assert(c == '\n');
+}
+
 
 int main() {
 	std::ios_base::sync_with_stdio(false);
 
 	{
-		u64 n, m;
 		std::cin >> n >> m;
-		assert(n == N);
-		assert(m == M);
+		// assert(n == N);
+		// assert(m == M);
+		skipNewLine();
+		global_params_set = true;
 	}
 
 	QuadDirStorage<std::vector<Pos>> bullets;
@@ -51,8 +69,8 @@ int main() {
 	Pos red_player;
 	Pos blue_player;
 
-	for (u64 i = 0; i < N; i++) {
-		for (u64 j = 0; j < M; j++) {
+	for (u64 i = 0; i < n; i++) {
+		for (u64 j = 0; j < m; j++) {
 			for (u64 dummy = 0; dummy < 4; dummy++) {
 				char c;
 				std::cin >> std::noskipws >> c;
@@ -87,9 +105,7 @@ int main() {
 
 			}
 		}
-		char c;
-		std::cin >> std::noskipws >> c;
-		assert (c == '\n');
+		skipNewLine();
 	}
 
 	std::cin >> round_number;
