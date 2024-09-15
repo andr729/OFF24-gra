@@ -41,7 +41,7 @@ constexpr std::array<Direction, 4> DirectionArr = {
 	Direction::RIGHT
 };
 
-Vec dirToVec(Direction dir) {
+constexpr Vec dirToVec(Direction dir) {
 	switch (dir) {
 		case Direction::UP:
 			return {0, -1};
@@ -52,6 +52,21 @@ Vec dirToVec(Direction dir) {
 		case Direction::RIGHT:
 			return {1, 0};
 	}
+	assert(false);
+}
+
+constexpr Direction flip(Direction dir) {
+	switch (dir) {
+		case Direction::UP:
+			return Direction::DOWN;
+		case Direction::DOWN:
+			return Direction::UP;
+		case Direction::LEFT:
+			return Direction::RIGHT;
+		case Direction::RIGHT:
+			return Direction::LEFT;
+	}
+	assert(false);
 }
 
 template <typename T>
@@ -82,6 +97,7 @@ struct QuadDirStorage {
 			case Direction::RIGHT:
 				return right();
 		}
+		assert(false);
 	}
 };
 
@@ -101,18 +117,32 @@ struct Bool {
 struct BoolLayer {
 private:
 	std::vector<Bool> bullets;
+
 	bool& getRef(u64 x, u64 y) {
 		return this->bullets.at(x * m + y).b;
 	}
+	
+	bool getRef(u64 x, u64 y) const {
+		return this->bullets.at(x * m + y).b;
+	}
+
 public:
 	BoolLayer(): bullets(n * m, {false}) {}
 
-	bool get(Vec pos) {
+	bool get(Vec pos) const {
 		return getRef(pos.x, pos.y);
 	}
 
 	void set(Vec pos, bool val) {
 		getRef(pos.x, pos.y) = val;
+	}
+
+	static BoolLayer fromVec(const std::vector<Vec>& vecs) {
+		BoolLayer res;
+		for (auto vec: vecs) {
+			res.set(vec, true);
+		}
+		return res;
 	}
 };
 
@@ -121,11 +151,13 @@ private:
 	QuadDirStorage<BoolLayer> bullets;
 
 public:
-	// BulletLayer() {}
-	// BulletLayer(const BulletLayer& other) = default;
-	// BulletLayer(BulletLayer&& other) = default;
+	BulletLayer() {}
+	BulletLayer(const BulletLayer& other) = default;
+	BulletLayer(BulletLayer&& other) = default;
+	
+	BulletLayer(QuadDirStorage<BoolLayer> values): bullets(values) {};
 
-	// BulletLayer& operator=(BulletLayer&& other) = default;
+	BulletLayer& operator=(BulletLayer&& other) = default;
 
 	void addBullet(Vec pos, Direction dir) {
 		bullets.get(dir).set(pos, true);
@@ -139,23 +171,67 @@ public:
 		return res;
 	}
 
-	void moveBulletsWithWalls(Vec direction, const BoolLayer& walls ) {
+	void moveBulletsWithWalls(const BoolLayer& walls ) {
 		// ideally we want to do it inplace for performance..
 		// for now we ignore it
 		BulletLayer new_bullets;
 
 		for (auto dir: DirectionArr) {
+			for (u64 i = 0; i < n; i++) {
+				for (u64 j = 0; j < m; j++) {
+					Vec pos = {i64(i), i64(j)};
+					if (bullets.get(dir).get(pos)) {
+						Vec new_pos = pos;
+						new_pos.x += dirToVec(dir).x;
+						new_pos.y += dirToVec(dir).y;
 
+						Direction new_dir = dir;
+
+						// @TODO: for now we don't check for out of bounds here.
+						// it should never happen for valid inputs.
+
+						if (walls.get(new_pos)) {
+							new_dir = flip(dir);
+							new_pos = pos;
+						}
+
+						new_bullets.addBullet(new_pos, new_dir);
+					}
+				}
+			}
 		}
 
 
 		// @TODO: make sure it actually moves:
 		*this = std::move(new_bullets);
 	}
+
+	[[gnu::cold]]
+	void debugPrint() {
+		// simple for now
+		for (u64 i = 0; i < n; i++) {
+			for (u64 j = 0; j < m; j++) {
+				Vec pos = {i64(i), i64(j)};
+				if (isBulletAt(pos)) {
+					std::cout << "*";
+				} else {
+					std::cout << " ";
+				}
+			}
+			std::cout << "\n";
+		}
+	}
 };
 
 struct GameState {
-
+	BoolLayer walls;
+	BulletLayer bullets;
+	Vec our_pos;
+	Vec enemy_pos;
+	
+	void moveBullets() {
+		bullets.moveBulletsWithWalls(walls);
+	}
 };
 
 namespace alpha_beta {
@@ -181,8 +257,8 @@ int main() {
 	Vec red_player;
 	Vec blue_player;
 
-	for (u64 i = 0; i < n; i++) {
-		for (u64 j = 0; j < m; j++) {
+	for (i64 i = 0; i < i64(n); i++) {
+		for (i64 j = 0; j < i64(m); j++) {
 			for (u64 dummy = 0; dummy < 4; dummy++) {
 				char c;
 				std::cin >> std::noskipws >> c;
@@ -225,9 +301,27 @@ int main() {
 	char who_are_we;
 	std::cin >> who_are_we;
 
+	GameState game_state = {
+		.walls = BoolLayer::fromVec(walls),
+
+		.bullets = {{
+			BoolLayer::fromVec(bullets.up()), 
+			BoolLayer::fromVec(bullets.down()),
+			BoolLayer::fromVec(bullets.left()),
+			BoolLayer::fromVec(bullets.right())
+		}},
+
+		.our_pos = who_are_we == 'R' ? red_player : blue_player,
+		.enemy_pos = who_are_we == 'R' ? blue_player : red_player
+	};
 
 
-
+	// debug print:
+	for (int i = 0; i < 10; i++) {
+		game_state.bullets.debugPrint();
+		game_state.moveBullets();
+		std::cout << "\n\n----------------\n\n";
+	}
 
 }
 
