@@ -334,9 +334,11 @@ int main() {
 	}
 
 	std::cin >> round_number;
-
+	skipNewLine();
+	
 	char who_are_we;
 	std::cin >> who_are_we;
+	assert(who_are_we == 'R' || who_are_we == 'B');
 
 	GameState game_state = {
 		.walls = BoolLayer::fromVec(walls),
