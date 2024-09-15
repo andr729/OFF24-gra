@@ -42,15 +42,19 @@ constexpr std::array<Direction, 4> DirectionArr = {
 };
 
 constexpr Vec dirToVec(Direction dir) {
+	// we have our dimension switched
+	// so x is i, y is j
+	// for this reason here
+	// Also x is inverted so we can print it from 0 to n-1 (not reversed)
 	switch (dir) {
 		case Direction::UP:
-			return {0, -1};
-		case Direction::DOWN:
-			return {0, 1};
-		case Direction::LEFT:
 			return {-1, 0};
-		case Direction::RIGHT:
+		case Direction::DOWN:
 			return {1, 0};
+		case Direction::LEFT:
+			return {0, -1};
+		case Direction::RIGHT:
+			return {0, 1};
 	}
 	assert(false);
 }
@@ -241,8 +245,8 @@ struct GameState {
 			}
 		}
 
-		out[our_pos.x][our_pos.y] = 'R';
-		out[enemy_pos.x][enemy_pos.y] = 'B';
+		out[our_pos.x][our_pos.y] = 'U';
+		out[enemy_pos.x][enemy_pos.y] = 'E';
 
 		for (u64 i = 0; i < n; i++) {
 			for (u64 j = 0; j < m; j++) {
@@ -292,29 +296,32 @@ int main() {
 			for (u64 dummy = 0; dummy < 4; dummy++) {
 				char c;
 				std::cin >> std::noskipws >> c;
+
+				Vec p = {i, j};
+
 				switch (c) {
 					case ' ':
 						break;
 					case '#':
-						walls.push_back({i, j});
+						walls.push_back(p);
 						break;
 					case 'R':
-						red_player = {i, j};
+						red_player = p;
 						break;
 					case 'B':
-						blue_player = {i, j};
+						blue_player = p;
 						break;
 					case '>':
-						bullets.right().push_back({i, j});
+						bullets.right().push_back(p);
 						break;
 					case '<':
-						bullets.left().push_back({i, j});
+						bullets.left().push_back(p);
 						break;
 					case '^':
-						bullets.up().push_back({i, j});
+						bullets.up().push_back(p);
 						break;
 					case 'v':
-						bullets.down().push_back({i, j});
+						bullets.down().push_back(p);
 						break;
 					default:
 						throw std::logic_error("Invalid character");
