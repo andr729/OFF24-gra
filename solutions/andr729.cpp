@@ -232,6 +232,36 @@ struct GameState {
 	void moveBullets() {
 		bullets.moveBulletsWithWalls(walls);
 	}
+
+	void debugPrint() {
+		char out[n][m];
+		for (u64 i = 0; i < n; i++) {
+			for (u64 j = 0; j < m; j++) {
+				out[i][j] = ' ';
+			}
+		}
+
+		out[our_pos.x][our_pos.y] = 'R';
+		out[enemy_pos.x][enemy_pos.y] = 'B';
+
+		for (u64 i = 0; i < n; i++) {
+			for (u64 j = 0; j < m; j++) {
+				Vec pos = {i64(i), i64(j)};
+				if (walls.get(pos)) {
+					out[i][j] = '#';
+				} else if (bullets.isBulletAt(pos)) {
+					out[i][j] = '*';
+				}
+			}
+		}
+
+		for (u64 i = 0; i < n; i++) {
+			for (u64 j = 0; j < m; j++) {
+				std::cout << out[i][j];
+			}
+			std::cout << "\n";
+		}
+	}
 };
 
 namespace alpha_beta {
@@ -318,7 +348,7 @@ int main() {
 
 	// debug print:
 	for (int i = 0; i < 10; i++) {
-		game_state.bullets.debugPrint();
+		game_state.debugPrint();
 		game_state.moveBullets();
 		std::cout << "\n\n----------------\n\n";
 	}
