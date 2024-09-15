@@ -1,5 +1,5 @@
-from runner import *
-from args import *
+from .runner import *
+from .args import *
 
 import time
 import os
