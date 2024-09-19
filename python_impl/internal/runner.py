@@ -66,13 +66,17 @@ class Game:
 			return self.parseOutput(out)
 		else:
 			try:
+				# @TODO: this fails when exec_str in not given explicitly as relative path
 				out = subprocess.check_output(exec_str, input = self.showForUser(who), text=True, timeout = 0.5)
 				return self.parseOutput(out)
 			except subprocess.TimeoutExpired:
 				print("Warning: Exec hit timeout")
 				return MoveProfile.WAIT
 			except ValueError:
-				print("Warning: Exec returned invalid value -- surrendering")
+				print(f"Warning: {exec_str} returned invalid value -- surrendering.")
+				return MoveProfile.SURRENDER
+			except subprocess.CalledProcessError:
+				print(f"Warning: {exec_str} returned non zero code -- surrendering.")
 				return MoveProfile.SURRENDER
 		
 	def performMoveWithExec(self):

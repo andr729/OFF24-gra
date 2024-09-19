@@ -456,16 +456,16 @@ int main() {
 	};
 
 	// standard:
-	// auto best_move = findBestHeroMove(game_state);
-	// std::cout << moveToIndex(best_move) << "\n";
+	auto best_move = findBestHeroMove(game_state);
+	std::cout << moveToIndex(best_move) << "\n";
 
 
-	// debug print:
-	for (int i = 0; i < 10; i++) {
-		game_state.debugPrint();
-		game_state.moveBullets();
-		std::cout << "\n\n----------------\n\n";
-	}
+	// // debug print:
+	// for (int i = 0; i < 10; i++) {
+	// 	game_state.debugPrint();
+	// 	game_state.moveBullets();
+	// 	std::cout << "\n\n----------------\n\n";
+	// }
 
 }
 
