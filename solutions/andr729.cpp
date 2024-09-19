@@ -22,6 +22,23 @@ constinit bool global_params_set = false;
 
 /*******************/
 
+enum class Move {
+	GO_UP       = 0,
+	GO_DOWN     = 1,
+	GO_LEFT     = 2,
+	GO_RIGHT    = 3,
+	SHOOT_UP    = 4,
+	SHOOT_DOWN  = 5,
+	SHOOT_LEFT  = 6,
+	SHOOT_RIGHT = 7,
+	WAIT        = 8,
+};
+
+enum class Player {
+	HERO  = 0,
+	ENEMY = 1,
+};
+
 struct Vec {
 	i64 x = 0;
 	i64 y = 0;
@@ -230,7 +247,7 @@ public:
 struct GameState {
 	BoolLayer walls;
 	BulletLayer bullets;
-	Vec our_pos;
+	Vec hero_pos;
 	Vec enemy_pos;
 	
 	void moveBullets() {
@@ -245,7 +262,7 @@ struct GameState {
 			}
 		}
 
-		out[our_pos.x][our_pos.y] = 'U';
+		out[hero_pos.x][hero_pos.y] = 'U';
 		out[enemy_pos.x][enemy_pos.y] = 'E';
 
 		for (u64 i = 0; i < n; i++) {
@@ -267,6 +284,7 @@ struct GameState {
 		}
 	}
 };
+
 
 namespace alpha_beta {
 	// TODO
@@ -350,7 +368,7 @@ int main() {
 			BoolLayer::fromVec(bullets.right())
 		}},
 
-		.our_pos = who_are_we == 'R' ? red_player : blue_player,
+		.hero_pos = who_are_we == 'R' ? red_player : blue_player,
 		.enemy_pos = who_are_we == 'R' ? blue_player : red_player
 	};
 
