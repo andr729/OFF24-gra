@@ -467,13 +467,16 @@ namespace alpha_beta {
 		// in the future we should pass references to the state
 		// and apply/undo diffs.
 
-		// @TODO: check if hero-turn in template is faster
-
 		const u64 next_remaining_depth = IS_HERO_TURN ? remaining_depth : remaining_depth - 1;
 
-		if (IS_HERO_TURN and (remaining_depth == 0 or state.state.isTerminal())) {
-			static_assert(not INITIAL, "Initial call should not be terminal");
-			return state.state.evaluate();
+		if constexpr (IS_HERO_TURN)
+		if (remaining_depth == 0 or state.state.isTerminal()) {
+			if constexpr (INITIAL) {
+				assert(false); // static_assertion fails hare
+			}
+			else {
+				return state.state.evaluate();
+			}
 		}
 
 		if constexpr (IS_HERO_TURN) {
@@ -528,25 +531,35 @@ namespace alpha_beta {
 
 				new_state.state.applyMove(hero_move, enemy_move);
 
-				// value = std::min(value, move_value);
+				auto move_value = alphaBeta<false, not IS_HERO_TURN>(
+					std::move(new_state),
+					next_remaining_depth,
+					alpha,
+					beta
+				);
 
-				// if (value < alpha) {
-				// 	break; // α cutoff
-				// }
+				value = std::min(value, move_value);
 
-				// beta = std::min(beta, value);
+				if (value < alpha) {
+					break; // α cutoff
+				}
+
+				beta = std::min(beta, value);
 			}
-		}
 
+			return value;
+		}
 	}
 }
 
 Move findBestHeroMove(GameState state) {
 	ABGameState ab_state = {std::move(state), std::nullopt};
-
-
-
-	return Move::WAIT;
+	return alpha_beta::alphaBeta<true, true>(
+		std::move(ab_state),
+		AB_DEPTH,
+		PositionEvaluation::losing(),
+		PositionEvaluation::wining()
+	);
 }
 
 
