@@ -7,7 +7,8 @@
 using u64 = uint64_t;
 using i64 = int64_t;
 
-constexpr u64 AB_DEPTH = 4;
+// @TODO: make it bigger when cutoffs are efficient
+constexpr u64 AB_DEPTH = 2;
 
 // constexpr u64 N = 15;
 // constexpr u64 M = 20;
@@ -469,13 +470,14 @@ namespace alpha_beta {
 
 		const u64 next_remaining_depth = IS_HERO_TURN ? remaining_depth : remaining_depth - 1;
 
-		if constexpr (IS_HERO_TURN)
-		if (remaining_depth == 0 or state.state.isTerminal()) {
-			if constexpr (INITIAL) {
-				assert(false); // static_assertion fails hare
-			}
-			else {
-				return state.state.evaluate();
+		if constexpr (IS_HERO_TURN) {
+			if (remaining_depth == 0 or state.state.isTerminal()) {
+				if constexpr (INITIAL) {
+					assert(false); // static_assertion fails hare
+				}
+				else {
+					return state.state.evaluate();
+				}
 			}
 		}
 
