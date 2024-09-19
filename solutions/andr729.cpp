@@ -350,13 +350,15 @@ struct PositionEvaluation {
 struct GameState {
 	BoolLayer walls;
 	BulletLayer bullets;
-	Vec hero_pos;
-	Vec enemy_pos;
+
+	// hero -- 0, enemy -- 1
+	Vec player_positions[2];
 	
 	void moveBullets() {
 		bullets.moveBulletsWithWalls(walls);
 	}
 
+	[[gnu::cold]]
 	void debugPrint() {
 		char out[n][m];
 		for (u64 i = 0; i < n; i++) {
@@ -365,8 +367,8 @@ struct GameState {
 			}
 		}
 
-		out[hero_pos.x][hero_pos.y] = 'U';
-		out[enemy_pos.x][enemy_pos.y] = 'E';
+		out[player_positions[0].x][player_positions[0].y] = 'U';
+		out[player_positions[1].x][player_positions[1].y] = 'E';
 
 		for (u64 i = 0; i < n; i++) {
 			for (u64 j = 0; j < m; j++) {
@@ -387,13 +389,17 @@ struct GameState {
 		}
 	}
 
+	void applyMove(Move hero_move, Move enemy_move) {
+		// @TODO
+	}
+
 	bool isMoveSensible(Move move, Player player) const {
 		// @TODO: use it for optimizations in the future
 		return true;
 	}
 
 	bool isTerminal() const {
-		return bullets.isBulletAt(hero_pos) or bullets.isBulletAt(enemy_pos);
+		return bullets.isBulletAt(player_positions[0]) or bullets.isBulletAt(player_positions[1]);
 	}
 
 	PositionEvaluation evaluate() const {
@@ -466,12 +472,8 @@ namespace alpha_beta {
 		const u64 next_remaining_depth = IS_HERO_TURN ? remaining_depth : remaining_depth - 1;
 
 		if (IS_HERO_TURN and (remaining_depth == 0 or state.state.isTerminal())) {
-			if constexpr (INITIAL) {
-				static_assert(false, "Initial call should not be terminal");
-			}
-			else {
-				return state.state.evaluate();
-			}
+			static_assert(not INITIAL, "Initial call should not be terminal");
+			return state.state.evaluate();
 		}
 
 		if constexpr (IS_HERO_TURN) {
@@ -484,12 +486,11 @@ namespace alpha_beta {
 				ABGameState new_state = state;
 				new_state.hero_move_commit = move;
 
-				auto move_value = alphaBeta(
+				auto move_value = alphaBeta<false, not IS_HERO_TURN>(
 					std::move(new_state),
 					next_remaining_depth,
 					alpha,
-					beta,
-					not hero_turn
+					beta
 				);
 
 				if (move_value > value) {
@@ -519,7 +520,13 @@ namespace alpha_beta {
 			for (auto move: MOVE_ARRAY)
 			if (state.state.isMoveSensible(move, Player::ENEMY)) {
 
-				auto move_value = ...;
+				ABGameState new_state = state;
+				new_state.hero_move_commit = {};
+
+				auto hero_move = state.hero_move_commit.value();
+				auto enemy_move = move;
+
+				new_state.state.applyMove(hero_move, enemy_move);
 
 				// value = std::min(value, move_value);
 
@@ -621,8 +628,8 @@ int main() {
 			BoolLayer::fromVec(bullets.right())
 		}},
 
-		.hero_pos = who_are_we == 'R' ? red_player : blue_player,
-		.enemy_pos = who_are_we == 'R' ? blue_player : red_player
+		.player_positions = { who_are_we == 'R' ? red_player : blue_player,
+		                      who_are_we == 'R' ? blue_player : red_player }
 	};
 
 	// standard:
