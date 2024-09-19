@@ -7,6 +7,8 @@
 using u64 = uint64_t;
 using i64 = int64_t;
 
+constexpr u64 AB_DEPTH = 4;
+
 // constexpr u64 N = 15;
 // constexpr u64 M = 20;
 
@@ -23,6 +25,10 @@ constinit bool global_params_set = false;
 
 /*******************/
 
+constexpr bool implies(bool a, bool b) {
+	return (not a) or b;
+}
+
 enum class Move {
 	GO_UP       = 0,
 	GO_DOWN     = 1,
@@ -33,6 +39,18 @@ enum class Move {
 	SHOOT_LEFT  = 6,
 	SHOOT_RIGHT = 7,
 	WAIT        = 8,
+};
+
+constexpr std::array<Move, 9> MOVE_ARRAY = {
+	Move::GO_UP,
+	Move::GO_DOWN,
+	Move::GO_LEFT,
+	Move::GO_RIGHT,
+	Move::SHOOT_UP,
+	Move::SHOOT_DOWN,
+	Move::SHOOT_LEFT,
+	Move::SHOOT_RIGHT,
+	Move::WAIT
 };
 
 auto moveToIndex(Move move) {
@@ -66,7 +84,7 @@ enum class Direction {
 	RIGHT = 3,
 };
 
-constexpr std::array<Direction, 4> DirectionArr = {
+constexpr std::array<Direction, 4> DIRECTION_ARRAY = {
 	Direction::UP,
 	Direction::DOWN,
 	Direction::LEFT,
@@ -120,20 +138,51 @@ struct QuadDirStorage {
 	QuadDirStorage& operator=(const QuadDirStorage& other) = default;
 	QuadDirStorage& operator=(QuadDirStorage&& other)      = default;
 
+	// eh... C++ boilerplate
+
 	T& up() {
 		return vals[0];
 	}
+	const T& up() const {
+		return vals[0];
+	}
+	
 	T& down() {
 		return vals[1];
 	}
+	const T& down() const {
+		return vals[1];
+	}
+
 	T& left() {
 		return vals[2];
 	}
+	const T& left() const {
+		return vals[2];
+	}
+
 	T& right() {
+		return vals[3];
+	}
+	const T& right() const {
 		return vals[3];
 	}
 
 	T& get(Direction dir) {
+		switch (dir) {
+			case Direction::UP:
+				return up();
+			case Direction::DOWN:
+				return down();
+			case Direction::LEFT:
+				return left();
+			case Direction::RIGHT:
+				return right();
+		}
+		assert(false);
+	}
+
+	const T& get(Direction dir) const{
 		switch (dir) {
 			case Direction::UP:
 				return up();
@@ -217,9 +266,9 @@ public:
 		bullets.get(dir).set(pos, true);
 	}
 
-	bool isBulletAt(Vec pos) {
+	bool isBulletAt(Vec pos) const {
 		bool res = false;
-		for (auto dir: DirectionArr) {
+		for (auto dir: DIRECTION_ARRAY) {
 			res |= bullets.get(dir).get(pos);
 		}
 		return res;
@@ -230,7 +279,7 @@ public:
 		// for now we ignore it
 		BulletLayer new_bullets;
 
-		for (auto dir: DirectionArr) {
+		for (auto dir: DIRECTION_ARRAY) {
 			for (u64 i = 0; i < n; i++) {
 				for (u64 j = 0; j < m; j++) {
 					Vec pos = {i64(i), i64(j)};
@@ -278,6 +327,24 @@ public:
 
 struct PositionEvaluation {
 	// ...
+
+	constexpr static PositionEvaluation losing() {
+		// @TODO
+		return PositionEvaluation();
+	}
+
+	constexpr static PositionEvaluation wining() {
+		// @TODO
+		return PositionEvaluation();
+	}
+
+	bool operator<(const PositionEvaluation& other) const {
+		return false; // for now every instance is equal
+	}
+
+	bool operator>(const PositionEvaluation& other) const {
+		return other < *this;
+	}
 };
 
 struct GameState {
@@ -320,9 +387,13 @@ struct GameState {
 		}
 	}
 
-	bool isMoveSensible() const {
+	bool isMoveSensible(Move move, Player player) const {
 		// @TODO: use it for optimizations in the future
 		return true;
+	}
+
+	bool isTerminal() const {
+		return bullets.isBulletAt(hero_pos) or bullets.isBulletAt(enemy_pos);
 	}
 
 	PositionEvaluation evaluate() const {
@@ -365,10 +436,109 @@ namespace alpha_beta {
     //             break (* α cutoff *)
     //         β := min(β, value)
     //     return value
+
+	template<bool INITIAL>
+	struct ABRetType {
+		using type = PositionEvaluation;
+	};
+
+	template<>
+	struct ABRetType<true> {
+		using type = Move;
+	};
+
+	template<bool INITIAL = false, bool IS_HERO_TURN>
+	auto alphaBeta(
+		ABGameState state,
+		u64 remaining_depth,
+		PositionEvaluation alpha,
+		PositionEvaluation beta)
+	-> ABRetType<INITIAL>::type	{
+		
+		static_assert(implies(INITIAL, IS_HERO_TURN), "Initial call should be hero turn");
+		
+		// @TODO: for now we just pass copies of the state, but
+		// in the future we should pass references to the state
+		// and apply/undo diffs.
+
+		// @TODO: check if hero-turn in template is faster
+
+		const u64 next_remaining_depth = IS_HERO_TURN ? remaining_depth : remaining_depth - 1;
+
+		if (IS_HERO_TURN and (remaining_depth == 0 or state.state.isTerminal())) {
+			if constexpr (INITIAL) {
+				static_assert(false, "Initial call should not be terminal");
+			}
+			else {
+				return state.state.evaluate();
+			}
+		}
+
+		if constexpr (IS_HERO_TURN) {
+			PositionEvaluation value = PositionEvaluation::losing();
+			Move best_move = Move::WAIT;
+
+			for (auto move: MOVE_ARRAY)
+			if (state.state.isMoveSensible(move, Player::HERO)) {
+			
+				ABGameState new_state = state;
+				new_state.hero_move_commit = move;
+
+				auto move_value = alphaBeta(
+					std::move(new_state),
+					next_remaining_depth,
+					alpha,
+					beta,
+					not hero_turn
+				);
+
+				if (move_value > value) {
+					value = move_value;
+					best_move = move;
+				}
+
+				if (value > beta) {
+					break; // β cutoff
+				}
+
+				alpha = std::max(alpha, value);
+			}
+
+			if constexpr (INITIAL) {
+				return best_move;
+			}
+			else {
+				return value;
+			}
+		}
+		else {
+			static_assert(not INITIAL, "Enemy move should not be a initial position");
+
+			PositionEvaluation value = PositionEvaluation::wining();
+
+			for (auto move: MOVE_ARRAY)
+			if (state.state.isMoveSensible(move, Player::ENEMY)) {
+
+				auto move_value = ...;
+
+				// value = std::min(value, move_value);
+
+				// if (value < alpha) {
+				// 	break; // α cutoff
+				// }
+
+				// beta = std::min(beta, value);
+			}
+		}
+
+	}
 }
 
 Move findBestHeroMove(GameState state) {
-	// ...
+	ABGameState ab_state = {std::move(state), std::nullopt};
+
+
+
 	return Move::WAIT;
 }
 
@@ -456,7 +626,7 @@ int main() {
 	};
 
 	// standard:
-	auto best_move = findBestHeroMove(game_state);
+	auto best_move = findBestHeroMove(std::move(game_state));
 	std::cout << moveToIndex(best_move) << "\n";
 
 
