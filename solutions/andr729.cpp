@@ -42,6 +42,16 @@ enum class Player {
 struct Vec {
 	i64 x = 0;
 	i64 y = 0;
+
+	constexpr Vec operator+(const Vec& other) const {
+		return {x + other.x, y + other.y};
+	}
+
+	constexpr Vec operator+=(const Vec& other) {
+		x += other.x;
+		y += other.y;
+		return *this;
+	}
 };
 
 enum class Direction {
@@ -203,8 +213,7 @@ public:
 					Vec pos = {i64(i), i64(j)};
 					if (bullets.get(dir).get(pos)) {
 						Vec new_pos = pos;
-						new_pos.x += dirToVec(dir).x;
-						new_pos.y += dirToVec(dir).y;
+						new_pos += dirToVec(dir);
 
 						Direction new_dir = dir;
 
