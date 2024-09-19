@@ -2,6 +2,7 @@
 #include <cassert>
 #include <vector>
 #include <array>
+#include <optional>
 
 using u64 = uint64_t;
 using i64 = int64_t;
@@ -33,6 +34,10 @@ enum class Move {
 	SHOOT_RIGHT = 7,
 	WAIT        = 8,
 };
+
+auto moveToIndex(Move move) {
+	return static_cast<std::underlying_type_t<Move>>(move);
+}
 
 enum class Player {
 	HERO  = 0,
@@ -104,6 +109,17 @@ template <typename T>
 struct QuadDirStorage {
 	T vals[4];
 
+	QuadDirStorage() = default;
+
+	QuadDirStorage(T up, T down, T left, T right):
+		vals{up, down, left, right} {}
+	
+	QuadDirStorage(const QuadDirStorage& other) = default;
+	QuadDirStorage(QuadDirStorage&& other)      = default;
+
+	QuadDirStorage& operator=(const QuadDirStorage& other) = default;
+	QuadDirStorage& operator=(QuadDirStorage&& other)      = default;
+
 	T& up() {
 		return vals[0];
 	}
@@ -159,6 +175,12 @@ private:
 
 public:
 	BoolLayer(): bullets(n * m, {false}) {}
+	
+	BoolLayer(const BoolLayer& other) = default;
+	BoolLayer(BoolLayer&& other)      = default;
+
+	BoolLayer& operator=(const BoolLayer& other) = default;
+	BoolLayer& operator=(BoolLayer&& other)      = default;
 
 	bool get(Vec pos) const {
 		return getRef(pos.x, pos.y);
@@ -182,12 +204,13 @@ private:
 	QuadDirStorage<BoolLayer> bullets;
 
 public:
-	BulletLayer() {}
-	BulletLayer(const BulletLayer& other) = default;
-	BulletLayer(BulletLayer&& other) = default;
+	BulletLayer() = default;
 	
-	BulletLayer(QuadDirStorage<BoolLayer> values): bullets(values) {};
+	BulletLayer(QuadDirStorage<BoolLayer> bullets): bullets(std::move(bullets)) {}
 
+	BulletLayer(const BulletLayer& other) = default;
+	BulletLayer(BulletLayer&& other)      = default;
+	
 	BulletLayer& operator=(BulletLayer&& other) = default;
 
 	void addBullet(Vec pos, Direction dir) {
@@ -253,6 +276,10 @@ public:
 	}
 };
 
+struct PositionEvaluation {
+	// ...
+};
+
 struct GameState {
 	BoolLayer walls;
 	BulletLayer bullets;
@@ -292,16 +319,63 @@ struct GameState {
 			std::cout << "\n";
 		}
 	}
+
+	bool isMoveSensible() const {
+		// @TODO: use it for optimizations in the future
+		return true;
+	}
+
+	PositionEvaluation evaluate() const {
+		// @TODO...
+		// this will be the bigger part of the code
+		return {};
+	}
+};
+
+struct ABGameState {
+	GameState state;
+	
+	// For now we assume that the game is full-information game, 
+	// and that we have to commit our move first.
+	// This approach reduces possibility of random bad moves,
+	// but is not optimal.
+	// We might try to change it in the future.  
+	std::optional<Move> hero_move_commit;
 };
 
 
 namespace alpha_beta {
-	// TODO
+	// PSUEDO CODE from https://en.wikipedia.org/wiki/Alpha%E2%80%93beta_pruning:
+	// function alphabeta(node, depth, α, β, maximizingPlayer) is
+    // if depth == 0 or node is terminal then
+    //     return the heuristic value of node
+    // if maximizingPlayer then
+    //     value := −∞
+    //     for each child of node do
+    //         value := max(value, alphabeta(child, depth − 1, α, β, FALSE))
+    //         if value > β then
+    //             break (* β cutoff *)
+    //         α := max(α, value)
+    //     return value
+    // else
+    //     value := +∞
+    //     for each child of node do
+    //         value := min(value, alphabeta(child, depth − 1, α, β, TRUE))
+    //         if value < α then
+    //             break (* α cutoff *)
+    //         β := min(β, value)
+    //     return value
+}
+
+Move findBestHeroMove(GameState state) {
+	// ...
+	return Move::WAIT;
 }
 
 
 int main() {
 	std::ios_base::sync_with_stdio(false);
+	std::cin.tie(nullptr);
 
 	{
 		std::cin >> n >> m;
@@ -380,6 +454,10 @@ int main() {
 		.hero_pos = who_are_we == 'R' ? red_player : blue_player,
 		.enemy_pos = who_are_we == 'R' ? blue_player : red_player
 	};
+
+	// standard:
+	// auto best_move = findBestHeroMove(game_state);
+	// std::cout << moveToIndex(best_move) << "\n";
 
 
 	// debug print:
