@@ -518,6 +518,8 @@ namespace alpha_beta {
 		using type = Move;
 	};
 
+	constinit u64 leaf_counter = 0;
+
 	template<bool INITIAL = false, bool IS_HERO_TURN>
 	auto alphaBeta(
 		ABGameState state,
@@ -540,6 +542,7 @@ namespace alpha_beta {
 					assert(false); // static_assertion fails hare
 				}
 				else {
+					leaf_counter++;
 					return state.state.evaluate();
 				}
 			}
@@ -714,6 +717,8 @@ int main() {
 	// standard:
 	auto best_move = findBestHeroMove(std::move(game_state));
 	std::cout << moveToIndex(best_move) << "\n";
+
+	std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
 
 	// // debug print:
