@@ -4,6 +4,7 @@
 #include <array>
 #include <optional>
 
+namespace {
 
 using u64 = uint64_t;
 using i64 = int64_t;
@@ -879,6 +880,8 @@ void exampleScenario(GameState game_state) {
 
 	game_state.applyMove(GO_UP, GO_UP);
 	game_state.debugPrint();
+}
+
 }
 
 int main() {
