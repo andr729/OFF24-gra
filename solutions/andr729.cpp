@@ -16,11 +16,11 @@ constexpr u64 AB_DEPTH = 4;
 /*******************/
 // Global parameters:
 
-u64 n;
-u64 m;
+static u64 n;
+static u64 m;
 
 constexpr u64 MAX_ROUND = 400;
-u64 round_number;
+static u64 round_number;
 
 constinit bool global_params_set = false;
 
@@ -615,7 +615,7 @@ namespace alpha_beta {
 		using type = Move;
 	};
 
-	constinit u64 leaf_counter = 0;
+	constinit static u64 leaf_counter = 0;
 
 	template<bool INITIAL = false, bool IS_HERO_TURN>
 	auto alphaBeta(
@@ -824,7 +824,7 @@ int main() {
 	auto best_move = findBestHeroMove(std::move(game_state));
 	std::cout << moveToIndex(best_move) << "\n";
 
-	std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
+	// std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
 
 	// // debug print:
