@@ -392,13 +392,11 @@ public:
 	}
 };
 
-struct GameState {
-	BoolLayer walls;
-	BulletLayer bullets;
-
-	// @opt: wrap it in some struct to ensure correctness
-	// hero -- 0, enemy -- 1
+struct PlayerPositions {
+private:
 	Vec player_positions[2];
+public:
+	PlayerPositions(Vec hero, Vec enemy): player_positions{hero, enemy} {}
 
 	Vec getPosition(Player player) const {
 		// @OPT: use static cast here
@@ -408,13 +406,37 @@ struct GameState {
 			return player_positions[1];
 		}
 	}
+
+	Vec& getPosition(Player player) {
+		// @OPT: use static cast here
+		if (player == Player::HERO) {
+			return player_positions[0];
+		} else {
+			return player_positions[1];
+		}
+	}
+
+	Vec getHeroPosition() const {
+		return player_positions[0];
+	}
+
+	Vec getEnemyPosition() const {
+		return player_positions[1];
+	}
+};
+
+struct GameState {
+	BoolLayer walls;
+	BulletLayer bullets;
+
+	PlayerPositions players;
 	
 	void moveBullets() {
 		bullets.moveBulletsWithWalls(walls);
 	}
 
 	[[gnu::cold]]
-	void debugPrint() {
+	void debugPrint() const {
 		char out[n][m];
 		for (u64 i = 0; i < n; i++) {
 			for (u64 j = 0; j < m; j++) {
@@ -422,8 +444,11 @@ struct GameState {
 			}
 		}
 
-		out[player_positions[0].x][player_positions[0].y] = 'U';
-		out[player_positions[1].x][player_positions[1].y] = 'E';
+		auto hero_pos = players.getHeroPosition();
+		auto enemy_pos = players.getEnemyPosition();
+
+		out[hero_pos.x][hero_pos.y] = 'U';
+		out[enemy_pos.x][enemy_pos.y] = 'E';
 
 		for (u64 i = 0; i < n; i++) {
 			for (u64 j = 0; j < m; j++) {
@@ -455,7 +480,7 @@ struct GameState {
 			return true;
 		}
 		auto dir = moveToDir(move);
-		auto pos = getPosition(player);
+		auto pos = players.getPosition(player);
 		auto new_pos = pos + dirToVec(dir);
 
 		// we don't shoot and don't walk into walls
@@ -464,7 +489,7 @@ struct GameState {
 	}
 
 	bool isTerminal() const {
-		return bullets.isBulletAt(player_positions[0]) or bullets.isBulletAt(player_positions[1]);
+		return bullets.isBulletAt(players.getHeroPosition()) or bullets.isBulletAt(players.getEnemyPosition());
 	}
 
 	PositionEvaluation evaluate() const {
@@ -710,8 +735,8 @@ int main() {
 			BoolLayer::fromVec(bullets.right())
 		}},
 
-		.player_positions = { who_are_we == 'R' ? red_player : blue_player,
-		                      who_are_we == 'R' ? blue_player : red_player }
+		.players = { who_are_we == 'R' ? red_player : blue_player,
+		             who_are_we == 'R' ? blue_player : red_player }
 	};
 
 	// standard:
