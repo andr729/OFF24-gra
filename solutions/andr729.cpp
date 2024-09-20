@@ -49,6 +49,22 @@ enum class Direction {
 	RIGHT = 3,
 };
 
+[[gnu::cold]]
+constexpr char dirToChar(Direction dir) {
+	switch (dir) {
+		case Direction::UP:
+			return '^';
+		case Direction::DOWN:
+			return 'v';
+		case Direction::LEFT:
+			return '<';
+		case Direction::RIGHT:
+			return '>';
+		default:
+			assert(false);
+	}
+}
+
 constexpr std::array<Direction, 4> DIRECTION_ARRAY = {
 	Direction::UP,
 	Direction::DOWN,
@@ -300,6 +316,19 @@ public:
 		return res;
 	}
 
+	/**
+	 * @note For debug print purposes
+	 */
+	[[gnu::cold]]
+	Direction oneDirAt(Vec pos) const {
+		for (auto dir: DIRECTION_ARRAY) {
+			if (bullets.get(dir).get(pos)) {
+				return dir;
+			}
+		}
+		assert(false);
+	}
+
 	void moveBulletsWithWalls(const BoolLayer& walls ) {
 		// ideally we want to do it inplace for performance..
 		// for now we ignore it
@@ -341,7 +370,7 @@ public:
 			for (u64 j = 0; j < m; j++) {
 				Vec pos = {i64(i), i64(j)};
 				if (isBulletAt(pos)) {
-					std::cout << "*";
+					std::cout << '*';
 				} else {
 					std::cout << " ";
 				}
@@ -492,7 +521,8 @@ struct GameState {
 				if (walls.get(pos)) {
 					out[i][j] = '#';
 				} else if (bullets.isBulletAt(pos)) {
-					out[i][j] = '*';
+					auto dir = bullets.oneDirAt(pos);
+					out[i][j] = dirToChar(dir);
 				}
 			}
 		}
@@ -821,8 +851,8 @@ int main() {
 	auto game_state = readInput();
 
 	// standard:
-	auto best_move = findBestHeroMove(std::move(game_state));
-	std::cout << moveToIndex(best_move) << "\n";
+	// auto best_move = findBestHeroMove(std::move(game_state));
+	// std::cout << moveToIndex(best_move) << "\n";
 
 	// std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
@@ -833,6 +863,8 @@ int main() {
 	// 	game_state.moveBullets();
 	// 	std::cout << "\n\n----------------\n\n";
 	// }
+
+	game_state.debugPrint();
 
 }
 
