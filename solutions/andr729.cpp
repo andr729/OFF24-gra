@@ -103,6 +103,8 @@ enum class Player {
 struct Vec {
 	i64 x = 0;
 	i64 y = 0;
+	
+	constexpr bool operator==(const Vec& other) const = default;
 
 	constexpr Vec operator+(const Vec& other) const {
 		return {x + other.x, y + other.y};
@@ -470,7 +472,61 @@ struct GameState {
 	}
 
 	void applyMove(Move hero_move, Move enemy_move) {
-		// @TODO
+		// 1. first perform players actions:
+
+		PlayerPositions old_positions = players;
+
+		for (auto [player, move]:
+			{std::pair{Player::HERO, hero_move},
+			{Player::ENEMY, enemy_move}}) {
+			
+			// @TODO: for now we don't bound check here
+			// @TODO: for now we allow "walk into walk"
+			// sensible move check should disallow it
+
+			// @TODO this switch could be refactored somehow..
+			// @OPT: switches are slow due to switch value check
+			switch (move) {
+				case Move::GO_UP:
+					players.getPosition(player) += dirToVec(Direction::UP);
+					break;
+				case Move::GO_DOWN:
+					players.getPosition(player) += dirToVec(Direction::DOWN);
+					break;
+				case Move::GO_LEFT:
+					players.getPosition(player) += dirToVec(Direction::LEFT);
+					break;
+				case Move::GO_RIGHT:
+					players.getPosition(player) += dirToVec(Direction::RIGHT);
+					break;
+				case Move::SHOOT_UP:
+					bullets.addBullet(players.getPosition(player), Direction::UP);
+					break;
+				case Move::SHOOT_DOWN:
+					bullets.addBullet(players.getPosition(player), Direction::DOWN);
+					break;
+				case Move::SHOOT_LEFT:
+					bullets.addBullet(players.getPosition(player), Direction::LEFT);
+					break;
+				case Move::SHOOT_RIGHT:
+					bullets.addBullet(players.getPosition(player), Direction::RIGHT);
+					break;
+				case Move::WAIT:
+					// do nothing
+					break;
+			}			
+		}
+
+		if (players.getHeroPosition() == players.getEnemyPosition()) {
+			players = old_positions;
+		}
+		
+		// 2. move bullets
+
+		this->moveBullets();
+
+		// @note: we don't check for players hit here
+		// it is done in the evaluation function and "isTerminal".
 	}
 
 	bool isMoveSensible(Move move, Player player) const {
@@ -555,7 +611,7 @@ namespace alpha_beta {
 		
 		static_assert(implies(INITIAL, IS_HERO_TURN), "Initial call should be hero turn");
 		
-		// @TODO: for now we just pass copies of the state, but
+		// @opt: for now we just pass copies of the state, but
 		// in the future we should pass references to the state
 		// and apply/undo diffs.
 
