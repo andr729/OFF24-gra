@@ -8,7 +8,7 @@ using u64 = uint64_t;
 using i64 = int64_t;
 
 // @TODO: make it bigger when cutoffs are efficient
-constexpr u64 AB_DEPTH = 2;
+constexpr u64 AB_DEPTH = 3;
 
 // constexpr u64 N = 15;
 // constexpr u64 M = 20;
@@ -327,7 +327,28 @@ public:
 };
 
 struct PositionEvaluation {
-	// ...
+private:
+	bool hero_hit;
+	bool enemy_hit;
+
+	// Fow nowe want here:
+	// Conditional survival:
+	// * only_hero_survival (round count + ghost count on max) 
+	// * only_enemy_survival (round count + ghost count on max)
+	//
+	// Unconditional survival:
+	// * hero_survival_with_ghost_enemy
+	// * enemy_survival_with_ghost_hero
+	//
+	// Future:
+	// * ghost don't do illogical moves
+	// 
+
+public:
+
+	// TODO: delete
+	constexpr PositionEvaluation(): hero_hit(false), enemy_hit(false) {}
+
 
 	constexpr static PositionEvaluation losing() {
 		// @TODO
