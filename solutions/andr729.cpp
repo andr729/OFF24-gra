@@ -656,13 +656,13 @@ Move findBestHeroMove(GameState state) {
 	);
 }
 
-
-int main() {
-	std::ios_base::sync_with_stdio(false);
-	std::cin.tie(nullptr);
-
+/** 
+ * @note: it sets globals n, m, round_number
+ * @return GameState 
+ */
+GameState readInput() {
 	{
-		std::cin >> n >> m;
+		std::cin >> ::n >> ::m;
 		// assert(n == N);
 		// assert(m == M);
 		skipNewLine();
@@ -718,7 +718,7 @@ int main() {
 		skipNewLine();
 	}
 
-	std::cin >> round_number;
+	std::cin >> ::round_number;
 	skipNewLine();
 	
 	char who_are_we;
@@ -738,6 +738,15 @@ int main() {
 		.players = { who_are_we == 'R' ? red_player : blue_player,
 		             who_are_we == 'R' ? blue_player : red_player }
 	};
+
+	return game_state;
+}
+
+int main() {
+	std::ios_base::sync_with_stdio(false);
+	std::cin.tie(nullptr);
+
+	auto game_state = readInput();
 
 	// standard:
 	auto best_move = findBestHeroMove(std::move(game_state));
