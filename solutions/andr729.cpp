@@ -4,6 +4,7 @@
 #include <array>
 #include <optional>
 
+
 using u64 = uint64_t;
 using i64 = int64_t;
 
@@ -533,6 +534,8 @@ struct GameState {
 			}
 			std::cout << "\n";
 		}
+
+		std::cout << "\n";
 	}
 
 	void applyMove(Move hero_move, Move enemy_move) {
@@ -844,6 +847,40 @@ GameState readInput() {
 	return game_state;
 }
 
+[[gnu::cold]]
+void exampleScenario(GameState game_state) {
+	using enum Move;
+	std::cout << std::boolalpha;
+
+	game_state.debugPrint();
+
+	game_state.applyMove(WAIT, WAIT);
+	game_state.debugPrint();
+
+	game_state.applyMove(WAIT, WAIT);
+	game_state.debugPrint();
+	std::cout << game_state.isTerminal() << "\n";
+
+	game_state.applyMove(WAIT, GO_UP);
+	game_state.debugPrint();
+	std::cout << game_state.isTerminal() << "\n";
+
+	game_state.applyMove(SHOOT_UP, WAIT);
+	game_state.debugPrint();
+
+	game_state.applyMove(SHOOT_DOWN, GO_DOWN);
+	game_state.debugPrint();
+
+	game_state.applyMove(GO_UP, GO_LEFT);
+	game_state.debugPrint();
+
+	game_state.applyMove(GO_RIGHT, GO_LEFT);
+	game_state.debugPrint();
+
+	game_state.applyMove(GO_UP, GO_UP);
+	game_state.debugPrint();
+}
+
 int main() {
 	std::ios_base::sync_with_stdio(false);
 	std::cin.tie(nullptr);
@@ -851,21 +888,14 @@ int main() {
 	auto game_state = readInput();
 
 	// standard:
-	// auto best_move = findBestHeroMove(std::move(game_state));
-	// std::cout << moveToIndex(best_move) << "\n";
+	auto best_move = findBestHeroMove(std::move(game_state));
+	std::cout << moveToIndex(best_move) << "\n";
 
 	// std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
+	// exampleScenario(game_state);
 
-	// // debug print:
-	// for (int i = 0; i < 10; i++) {
-	// 	game_state.debugPrint();
-	// 	game_state.moveBullets();
-	// 	std::cout << "\n\n----------------\n\n";
-	// }
-
-	game_state.debugPrint();
-
+	
 }
 
 
