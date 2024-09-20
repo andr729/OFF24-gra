@@ -42,6 +42,43 @@ enum class Move {
 	WAIT        = 8,
 };
 
+enum class Direction {
+	UP    = 0,
+	DOWN  = 1,
+	LEFT  = 2,
+	RIGHT = 3,
+};
+
+constexpr std::array<Direction, 4> DIRECTION_ARRAY = {
+	Direction::UP,
+	Direction::DOWN,
+	Direction::LEFT,
+	Direction::RIGHT
+};
+
+constexpr Direction moveToDir(Move move) {
+	switch (move) {
+		case Move::GO_UP:
+			return Direction::UP;
+		case Move::GO_DOWN:
+			return Direction::DOWN;
+		case Move::GO_LEFT:
+			return Direction::LEFT;
+		case Move::GO_RIGHT:
+			return Direction::RIGHT;
+		case Move::SHOOT_UP:
+			return Direction::UP;
+		case Move::SHOOT_DOWN:
+			return Direction::DOWN;
+		case Move::SHOOT_LEFT:
+			return Direction::LEFT;
+		case Move::SHOOT_RIGHT:
+			return Direction::RIGHT;
+		default:
+			assert(false);
+	}
+}
+
 constexpr std::array<Move, 9> MOVE_ARRAY = {
 	Move::GO_UP,
 	Move::GO_DOWN,
@@ -76,20 +113,6 @@ struct Vec {
 		y += other.y;
 		return *this;
 	}
-};
-
-enum class Direction {
-	UP    = 0,
-	DOWN  = 1,
-	LEFT  = 2,
-	RIGHT = 3,
-};
-
-constexpr std::array<Direction, 4> DIRECTION_ARRAY = {
-	Direction::UP,
-	Direction::DOWN,
-	Direction::LEFT,
-	Direction::RIGHT
 };
 
 constexpr Vec dirToVec(Direction dir) {
@@ -373,8 +396,18 @@ struct GameState {
 	BoolLayer walls;
 	BulletLayer bullets;
 
+	// @opt: wrap it in some struct to ensure correctness
 	// hero -- 0, enemy -- 1
 	Vec player_positions[2];
+
+	Vec getPosition(Player player) const {
+		// @OPT: use static cast here
+		if (player == Player::HERO) {
+			return player_positions[0];
+		} else {
+			return player_positions[1];
+		}
+	}
 	
 	void moveBullets() {
 		bullets.moveBulletsWithWalls(walls);
@@ -416,8 +449,18 @@ struct GameState {
 	}
 
 	bool isMoveSensible(Move move, Player player) const {
-		// @TODO: use it for optimizations in the future
-		return true;
+		if (move == Move::WAIT) {
+			// we assume that wait is always sensible
+			// so nothing can break in the algorithm
+			return true;
+		}
+		auto dir = moveToDir(move);
+		auto pos = getPosition(player);
+		auto new_pos = pos + dirToVec(dir);
+
+		// we don't shoot and don't walk into walls
+		// waiting is no worse then that
+		return not walls.get(new_pos);
 	}
 
 	bool isTerminal() const {
