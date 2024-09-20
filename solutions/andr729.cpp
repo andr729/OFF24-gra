@@ -370,23 +370,57 @@ private:
 	// 
 
 public:
-
-	// TODO: delete
-	constexpr PositionEvaluation(): hero_hit(false), enemy_hit(false) {}
+	constexpr PositionEvaluation(bool hero_hit, bool enemy_hit):
+		hero_hit(hero_hit), enemy_hit(enemy_hit) {}
 
 
 	constexpr static PositionEvaluation losing() {
-		// @TODO
-		return PositionEvaluation();
+		return PositionEvaluation(true, false);
 	}
 
 	constexpr static PositionEvaluation wining() {
-		// @TODO
-		return PositionEvaluation();
+		return PositionEvaluation(false, true);
 	}
 
+	constexpr bool isWining() const {
+		return not hero_hit and enemy_hit;
+	}
+	constexpr bool isLosing() const {
+		return hero_hit and not enemy_hit;
+	}
+	constexpr bool isDraw() const {
+		return hero_hit and enemy_hit;
+	}
+
+	/**
+	 * @brief eval1 < eval2, means that eval2 is better for hero
+	 */
 	bool operator<(const PositionEvaluation& other) const {
-		return false; // for now every instance is equal
+		// it checks if "we are worse"
+
+		// @note this will get much more complicated..
+
+		// @TODO: map it to some int, and just compare it..
+		
+		if (this->isWining() and (not other.isWining())) {
+			// we are better
+			return false;
+		}
+		if ((not this->isWining()) and other.isWining()) {
+			// we are worse
+			return true;
+		}
+		if (this->isLosing() and (not other.isLosing())) {
+			// we are worse
+			return true;
+		}
+		if ((not this->isLosing()) and other.isLosing()) {
+			// we are better
+			return false;
+		}
+		// @TODO: any other deterministic cases?
+
+		return false;
 	}
 
 	bool operator>(const PositionEvaluation& other) const {
@@ -550,8 +584,11 @@ struct GameState {
 
 	PositionEvaluation evaluate() const {
 		// @TODO...
-		// this will be the bigger part of the code
-		return {};
+		// this will be a bigger part of the code
+		return {
+			bullets.isBulletAt(players.getHeroPosition()),
+			bullets.isBulletAt(players.getEnemyPosition())
+		};
 	}
 };
 
