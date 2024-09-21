@@ -374,21 +374,21 @@ public:
 
 
 struct SurvivalData {
-	// opt: using u32 here may be faster
+	// opt: using i32 here may be faster
 	// due to lower stack usage
+	// @note: signed, so -1 will not cause bugs
 
 	/**
 	 * @note: round count is capped
 	 */
-	u64 round_count = 0;
+	i64 round_count = 0;
 
 	/**
 	 * @brief 0 if round count was not capped.
 	 * count of ghost at the end if it was.
 	 */
-	u64 ghost_count = 0;
+	i64 ghost_count = 0;
 };
-
 
 struct PositionEvaluation {
 private:
@@ -407,6 +407,9 @@ private:
 	// Future:
 	// * ghost don't do illogical moves
 	//
+
+	// @note: conditional: if other player is chilling
+	// @note: unconditional: no mather what other player will do
 
 	SurvivalData hero_conditional;
 	SurvivalData hero_unconditional;
@@ -447,7 +450,15 @@ public:
 	}
 
 	constexpr bool isWining() const {
-		return not hero_hit and enemy_hit;
+		// direct:
+		if (not hero_hit and enemy_hit) return true;
+
+		// @TODO: do we want it?
+		// // indirect:
+		// if (hero_unconditional.round_count > enemy_conditional.round_count)
+		// 	return true;
+
+		return false;
 	}
 	constexpr bool isLosing() const {
 		return hero_hit and not enemy_hit;
