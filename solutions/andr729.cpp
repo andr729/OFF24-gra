@@ -306,6 +306,10 @@ public:
 	
 	BulletLayer& operator=(BulletLayer&& other) = default;
 
+	const BoolLayer& getBullets(Direction dir) const {
+		return bullets.get(dir);
+	}
+
 	void addBullet(Vec pos, Direction dir) {
 		bullets.get(dir).set(pos, true);
 	}
@@ -489,6 +493,88 @@ public:
 
 	Vec getEnemyPosition() const {
 		return player_positions[1];
+	}
+};
+
+struct DebugPrintLayer {
+private:
+	std::vector<std::vector<char>> data;
+public:
+	
+	[[gnu::cold]]
+	DebugPrintLayer(): data(n, std::vector<char>(m, ' ')) {}
+
+	[[gnu::cold]]
+	void apply(const BoolLayer& layer, char c) {
+		for (i64 i = 0; i < n; i++) {
+			for (i64 j = 0; j < m; j++) {
+				if (layer.get({i, j})) {
+					data[i][j] = c;
+				}
+			}
+		}
+	}
+
+	[[gnu::cold]]
+	void apply(const BulletLayer& layer) {
+		apply(layer.getBullets(Direction::UP), '^');
+		apply(layer.getBullets(Direction::DOWN), 'v');
+		apply(layer.getBullets(Direction::LEFT), '<');
+		apply(layer.getBullets(Direction::RIGHT), '>');
+	}
+};
+
+struct GhostPlayerLayer {
+private:
+	BoolLayer ghosts;
+public:
+	GhostPlayerLayer(Vec initial_pos): ghosts() {
+		ghosts.set(initial_pos, true);
+	}
+
+	u64 ghostCount() const {
+		u64 count = 0;
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
+				count += ghosts.get({i, j});
+			}
+		}
+		return count;
+	}
+
+	void eliminateGhostsAt(const BoolLayer& eliminations) {
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
+				Vec pos = {i, j};
+				if (eliminations.get(pos)) {
+					ghosts.set(pos, false);
+				}
+			}
+		}
+	}
+
+	void eliminateGhostsAt(const BulletLayer& bullets) {
+		// @opt: test if it is faset to use isBulletAt
+
+		eliminateGhostsAt(bullets.getBullets(Direction::UP));
+		eliminateGhostsAt(bullets.getBullets(Direction::DOWN));
+		eliminateGhostsAt(bullets.getBullets(Direction::LEFT));
+		eliminateGhostsAt(bullets.getBullets(Direction::RIGHT));
+	}
+
+	void moveGhostsEverywhere() {
+		// @todo: no bound checks here -- should not be needed
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
+				Vec pos = {i, j};
+				if (ghosts.get(pos)) {
+					for (auto dir: DIRECTION_ARRAY) {
+						Vec new_pos = pos + dirToVec(dir);
+						ghosts.set(new_pos, true);
+					}
+				}
+			}
+		}
 	}
 };
 
