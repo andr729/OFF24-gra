@@ -474,6 +474,11 @@ public:
 		bullets.get(dir).atIndexMut(pos) = true;
 	}
 
+	void addBulletAtIndexIf(i64 pos, Direction dir, bool if_) {
+		bullets.get(dir).atIndexMut(pos) |= if_;
+	}
+
+
 	[[gnu::cold]]
 	bool isBulletAt(Vec pos) const {
 		bool res = false;
@@ -883,11 +888,12 @@ public:
 		for (i64 i = 0; i < i64(n*m); i++) {
 			// for (i64 j = 0; j < i64(m); j++) {
 				// Vec pos = {i, j};
-				if (ghosts.atIndex(i)) {
+				// if (ghosts.atIndex(i)) {
+					bool shoot = ghosts.atIndex(i);
 					for (auto dir: DIRECTION_ARRAY) {
-						bullets.addBulletAtIndex(i, dir);
+						bullets.addBulletAtIndexIf(i, dir, shoot);
 					}
-				}
+				// }
 			// }
 		}
 	}
