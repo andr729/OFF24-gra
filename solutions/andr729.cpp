@@ -368,22 +368,6 @@ public:
 		// @TODO: make sure it actually moves:
 		*this = std::move(new_bullets);
 	}
-
-	[[gnu::cold]]
-	void debugPrint() {
-		// simple for now
-		for (u64 i = 0; i < n; i++) {
-			for (u64 j = 0; j < m; j++) {
-				Vec pos = {i64(i), i64(j)};
-				if (isBulletAt(pos)) {
-					std::cout << '*';
-				} else {
-					std::cout << " ";
-				}
-			}
-			std::cout << "\n";
-		}
-	}
 };
 
 struct PositionEvaluation {
@@ -506,8 +490,8 @@ public:
 
 	[[gnu::cold]]
 	void apply(const BoolLayer& layer, char c) {
-		for (i64 i = 0; i < n; i++) {
-			for (i64 j = 0; j < m; j++) {
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
 				if (layer.get({i, j})) {
 					data[i][j] = c;
 				}
@@ -517,10 +501,25 @@ public:
 
 	[[gnu::cold]]
 	void apply(const BulletLayer& layer) {
-		apply(layer.getBullets(Direction::UP), '^');
-		apply(layer.getBullets(Direction::DOWN), 'v');
-		apply(layer.getBullets(Direction::LEFT), '<');
-		apply(layer.getBullets(Direction::RIGHT), '>');
+		for (auto dir: DIRECTION_ARRAY) {
+			apply(layer.getBullets(dir), dirToChar(dir));
+		}
+	}
+
+	[[gnu::cold]]
+	void apply(const PlayerPositions& players) {
+		data[players.getHeroPosition().x][players.getHeroPosition().y] = 'H';
+		data[players.getEnemyPosition().x][players.getEnemyPosition().y] = 'E';
+	}
+
+	[[gnu::cold]]
+	void print() const {
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
+				std::cout << data[i][j];
+			}
+			std::cout << "\n";
+		}
 	}
 };
 
@@ -590,38 +589,11 @@ struct GameState {
 
 	[[gnu::cold]]
 	void debugPrint() const {
-		char out[n][m];
-		for (u64 i = 0; i < n; i++) {
-			for (u64 j = 0; j < m; j++) {
-				out[i][j] = ' ';
-			}
-		}
-
-		auto hero_pos = players.getHeroPosition();
-		auto enemy_pos = players.getEnemyPosition();
-
-		out[hero_pos.x][hero_pos.y] = 'U';
-		out[enemy_pos.x][enemy_pos.y] = 'E';
-
-		for (u64 i = 0; i < n; i++) {
-			for (u64 j = 0; j < m; j++) {
-				Vec pos = {i64(i), i64(j)};
-				if (walls.get(pos)) {
-					out[i][j] = '#';
-				} else if (bullets.isBulletAt(pos)) {
-					auto dir = bullets.oneDirAt(pos);
-					out[i][j] = dirToChar(dir);
-				}
-			}
-		}
-
-		for (u64 i = 0; i < n; i++) {
-			for (u64 j = 0; j < m; j++) {
-				std::cout << out[i][j];
-			}
-			std::cout << "\n";
-		}
-
+		DebugPrintLayer printer;
+		printer.apply(players);
+		printer.apply(bullets);
+		printer.apply(walls, '#');
+		printer.print();
 		std::cout << "\n";
 	}
 
@@ -977,12 +949,12 @@ int main() {
 	auto game_state = readInput();
 
 	// standard:
-	auto best_move = findBestHeroMove(std::move(game_state));
-	std::cout << moveToIndex(best_move) << "\n";
+	// auto best_move = findBestHeroMove(std::move(game_state));
+	// std::cout << moveToIndex(best_move) << "\n";
 
 	// std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
-	// exampleScenario(game_state);
+	exampleScenario(game_state);
 
 	
 }
