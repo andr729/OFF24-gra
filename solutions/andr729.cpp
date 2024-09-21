@@ -3,13 +3,14 @@
 #include <vector>
 #include <array>
 #include <optional>
-#include <memory>
+// #include <memory>
 
 namespace {
 
-#define CONST_NM yes
+#define CONST_NM 1
+#define NO_VECTOR_IF_POSSIBLE 0
+#define NO_BOUND_CHECKS 1
 
-// @opt: optional constexpr n, m
 // @opt: debug/release mode (with macros, so we don't waste opt passes)
 
 using u64 = uint64_t;
@@ -36,7 +37,7 @@ namespace conf {
 /*******************/
 // Global parameters:
 
-#if CONST_NM == yes
+#if CONST_NM == 1
 	constexpr u64 n = 15;
 	constexpr u64 m = 20;
 #else
@@ -285,75 +286,76 @@ struct Bool {
 
 struct BoolLayer {
 private:
-	// #if CONST_NM == yes
-	// 	struct BoolArr {
-	// 		// @TODO: does it work?
-	// 		bool arr[n][m] = { false };
+	#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
+		struct BoolArr {
+			// @TODO: does it work?
+			bool arr[n * m] = { false };
+		};
+		struct BoolArrPtr {
+			BoolArr* ptr;
 
-	// 		// BoolArr() = default;
-	// 		// BoolArr(const BoolArr& other) {
-	// 		// 	// @opt: memcpy
-	// 		// 	for (u64 i = 0; i < n; i++) {
-	// 		// 		for (u64 j = 0; j < m; j++) {
-	// 		// 			arr[i][j] = other.arr[i][j];
-	// 		// 		}
-	// 		// 	}
-	// 		// }
-	// 		// BoolArr(BoolArr&& other) = delete;
-	// 		// // BoolArr& operator=(const BoolArr& other) = default;
-	// 		// // BoolArr& operator=(BoolArr&& other) = default;
-	// 	};
-	// 	struct BoolArrPtr {
-	// 		std::unique_ptr<BoolArr> ptr;
+			BoolArrPtr(): ptr(new BoolArr()) {}
+			BoolArrPtr(const BoolArrPtr& other) {
+				ptr = new BoolArr(*other.ptr);
+			}
+			BoolArrPtr(BoolArrPtr&& other) {
+				ptr = other.ptr;
+				other.ptr = nullptr;
+			};
+			BoolArrPtr& operator=(const BoolArrPtr& other) {
+				// @opt: memcpy
+				for (u64 i = 0; i < n * m; i++) {
+					ptr->arr[i] = other.ptr->arr[i];
+				}
+				return *this;
+			};
+			BoolArrPtr& operator=(BoolArrPtr&& other) {
+				// @opt: memcpy
+				for (u64 i = 0; i < n * m; i++) {
+					ptr->arr[i] = other.ptr->arr[i];
+				}
+				return *this;
+			}
 
-	// 		BoolArrPtr(): ptr(std::make_unique<BoolArr>()) {}
-	// 		BoolArrPtr(const BoolArrPtr& other) {
-	// 			ptr = std::make_unique<BoolArr>(*other.ptr);
-	// 		}
-	// 		BoolArrPtr(BoolArrPtr&& other) = default;
-	// 		BoolArrPtr& operator=(const BoolArrPtr& other) {
-	// 			// @opt: memcpy
-	// 			for (u64 i = 0; i < n; i++) {
-	// 				for (u64 j = 0; j < m; j++) {
-	// 					ptr->arr[i][j] = other.ptr->arr[i][j];
-	// 				}
-	// 			}
-	// 			return *this;
-	// 		};
-	// 		BoolArrPtr& operator=(BoolArrPtr&& other) = default;
-	// 	};
-	// 	BoolArrPtr bullets;
-	// 	// @note: having in on stack might be bad
-	// #else
+			~BoolArrPtr() {
+				delete ptr;
+			}
+		};
+
+		BoolArrPtr bullets;
+		// @note: having in on stack might be bad
+	#else
 		std::vector<Bool> bullets;
-	// #endif
+	#endif
 
 	bool& getRef(u64 x, u64 y) {
-		// @opt: test []
-		// #if CONST_NM == yes
-		// 	// @note: no bound check here..
-		// 	return this->bullets.ptr->arr[x][y];
-		// #else
+		#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
+			// @note: no bound check here..
+			return this->bullets.ptr->arr[x * m + y];
+		#else
 			return this->bullets.at(x * m + y).b;
-		// #endif
+		#endif
 	}
 	
 	bool getRef(u64 x, u64 y) const {
-		// @opt: test []
-		// #if CONST_NM == yes
-		// 	// @note: no bound check here..
-		// 	return this->bullets.ptr->arr[x][y];
-		// #else
-			return this->bullets.at(x * m + y).b;
-		// #endif
+		#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
+			// @note: no bound check here..
+			return this->bullets.ptr->arr[x * m + y];
+		#else
+			#if NO_BOUND_CHECKS == 1
+				return this->bullets[x * m + y].b;
+			#else 
+				return this->bullets.at(x * m + y).b;
+			#endif
+		#endif
 	}
 
 public:
-	// #if CONST_NM == yes
-	// 	BoolLayer() = default;
-	// #else
+	#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
+		BoolLayer() = default;
+	#else
 		BoolLayer(): bullets(n * m, {false}) {}
-	// #endif
+	#endif
 
 	BoolLayer(const BoolLayer& other) = default;
 	BoolLayer(BoolLayer&& other)      = default;
@@ -1123,7 +1125,7 @@ Move findBestHeroMove(GameState state) {
  */
 GameState readInput() {
 	{
-		#if CONST_NM == yes
+		#if CONST_NM == 1
 			u64 local_n, local_m;
 			std::cin >> local_n >> local_m;
 			assert(n == local_n);
