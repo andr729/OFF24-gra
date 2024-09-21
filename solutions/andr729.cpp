@@ -11,6 +11,7 @@ namespace {
 #define NO_VECTOR_IF_POSSIBLE 0
 #define LEAK_NO_VEC_MEM 0
 #define NO_BOUND_CHECKS 1
+#define NO_OTHER_CHECKS 1
 
 // @opt: debug/release mode (with macros, so we don't waste opt passes)
 
@@ -343,7 +344,11 @@ private:
 			// @note: no bound check here..
 			return this->bullets.ptr->arr[x * m + y];
 		#else
-			return this->bullets.at(x * m + y).b;
+			#if NO_BOUND_CHECKS == 1
+				return this->bullets[x * m + y].b;
+			#else 
+				return this->bullets.at(x * m + y).b;
+			#endif
 		#endif
 	}
 	
@@ -1029,6 +1034,7 @@ namespace alpha_beta {
 		const u64 next_remaining_depth = IS_HERO_TURN ? remaining_depth : remaining_depth - 1;
 
 		if constexpr (IS_HERO_TURN) {
+			[[unlikely]]
 			if (remaining_depth == 0 or state.state.isTerminal()) {
 				if constexpr (INITIAL) {
 					assert(false); // static_assertion fails hare
@@ -1061,7 +1067,7 @@ namespace alpha_beta {
 					value = move_value;
 					best_move = move;
 				}
-
+				
 				if (value > beta) {
 					break; // β cutoff
 				}
@@ -1087,7 +1093,12 @@ namespace alpha_beta {
 				ABGameState new_state = state;
 				new_state.hero_move_commit = {};
 
-				auto hero_move = state.hero_move_commit.value();
+				#if NO_OTHER_CHECKS == 1
+					auto hero_move = *state.hero_move_commit;
+				#else
+					auto hero_move = state.hero_move_commit.value();
+				#endif
+				
 				auto enemy_move = move;
 
 				new_state.state.applyMove(hero_move, enemy_move);
