@@ -124,6 +124,7 @@ constexpr Direction moveToDir(Move move) {
 	}
 }
 
+// @OPT: change the order maybe?
 constexpr std::array<Move, 9> MOVE_ARRAY = {
 	Move::GO_UP,
 	Move::GO_DOWN,
@@ -133,7 +134,7 @@ constexpr std::array<Move, 9> MOVE_ARRAY = {
 	Move::SHOOT_DOWN,
 	Move::SHOOT_LEFT,
 	Move::SHOOT_RIGHT,
-	Move::WAIT
+	Move::WAIT,
 };
 
 auto moveToIndex(Move move) {
@@ -382,6 +383,10 @@ public:
 		return getRef(pos.x, pos.y);
 	}
 
+	bool& getBoolRef(Vec pos) {
+		return getRef(pos.x, pos.y);
+	}
+
 	void set(Vec pos, bool val) {
 		getRef(pos.x, pos.y) = val;
 	}
@@ -397,6 +402,7 @@ public:
 
 struct BulletLayer {
 private:
+	// @opt: reversing the "storage dims" here might be faster
 	QuadDirStorage<BoolLayer> bullets;
 
 public:
@@ -722,6 +728,7 @@ public:
 
 struct GhostPlayerLayer {
 private:
+	// @opt: hmm.. bitsets?
 	BoolLayer ghosts;
 public:
 	GhostPlayerLayer(Vec initial_pos): ghosts() {
@@ -746,9 +753,7 @@ public:
 		for (i64 i = 0; i < i64(n); i++) {
 			for (i64 j = 0; j < i64(m); j++) {
 				Vec pos = {i, j};
-				if (eliminations.get(pos)) {
-					ghosts.set(pos, false);
-				}
+				ghosts.getBoolRef(pos) &= (!eliminations.get(pos));
 			}
 		}
 	}
@@ -930,6 +935,9 @@ struct GameState {
 		BulletLayer enemy_c_bullets;
 
 		// @TODO: make it less boilerplate'y
+
+		// @OPT making one struct here for quad opers
+		// could be way faster
 
 		for (u64 i = 0; i < conf::MAX_ROUND_LOOKUP; i++) {
 			// sim step:
