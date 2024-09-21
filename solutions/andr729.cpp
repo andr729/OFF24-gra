@@ -357,9 +357,9 @@ public:
 		// for now we ignore it
 		BulletLayer new_bullets;
 
-		for (auto dir: DIRECTION_ARRAY) {
-			for (u64 i = 0; i < n; i++) {
-				for (u64 j = 0; j < m; j++) {
+		for (u64 i = 0; i < n; i++) {
+			for (u64 j = 0; j < m; j++) {
+				for (auto dir: DIRECTION_ARRAY) {
 					Vec pos = {i64(i), i64(j)};
 					if (bullets.get(dir).get(pos)) {
 						Vec new_pos = pos;
