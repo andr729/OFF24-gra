@@ -11,6 +11,7 @@ namespace {
 #define LEAK_NO_VEC_MEM 0
 #define NO_BOUND_CHECKS 1
 #define NO_OTHER_CHECKS 1
+#define UNSAFE_OTHERS 1
 
 // @opt: debug/release mode (with macros, so we don't waste opt passes)
 
@@ -103,6 +104,11 @@ constexpr std::array<Direction, 4> DIRECTION_ARRAY = {
 };
 
 constexpr Direction moveToDir(Move move) {
+	#if UNSAFE_OTHERS == 1
+		return static_cast<Direction>(
+			static_cast<std::underlying_type_t<Move>>(move) % 4
+		);
+	#else
 	switch (move) {
 		case Move::GO_UP:
 			return Direction::UP;
@@ -123,6 +129,7 @@ constexpr Direction moveToDir(Move move) {
 		default:
 			assert(false);
 	}
+	#endif
 }
 
 // @OPT: change the order maybe?
@@ -154,6 +161,9 @@ constexpr u64 playerToIndex(Player player) {
 struct Vec {
 	i64 x = 0;
 	i64 y = 0;
+
+	constexpr Vec() = default;
+	constexpr Vec(i64 x, i64 y): x(x), y(y) {}
 	
 	constexpr bool operator==(const Vec& other) const = default;
 
@@ -168,11 +178,14 @@ struct Vec {
 	}
 };
 
+
 constexpr Vec dirToVec(Direction dir) {
 	// we have our dimension switched
 	// so x is i, y is j
 	// for this reason here
 	// Also x is inverted so we can print it from 0 to n-1 (not reversed)
+
+	// @note: using array is here not faster
 	switch (dir) {
 		case Direction::UP:
 			return {-1, 0};
@@ -194,6 +207,12 @@ constexpr std::array<Vec, 4> DIR_VEC_ARRAY = {
 };
 
 constexpr Direction flip(Direction dir) {
+	#if UNSAFE_OTHERS == 1
+		// 0->1, 1->0, 2->3, 3->2
+		auto dir_int = static_cast<std::underlying_type_t<Direction>>(dir);
+		dir_int ^= 0b1;
+		return static_cast<Direction>(dir_int);
+	#else
 	switch (dir) {
 		case Direction::UP:
 			return Direction::DOWN;
@@ -205,6 +224,7 @@ constexpr Direction flip(Direction dir) {
 			return Direction::LEFT;
 	}
 	assert(false);
+	#endif
 }
 
 template <typename T>
@@ -341,28 +361,35 @@ private:
 		std::vector<Bool> bullets;
 	#endif
 
-	bool& getRef(u64 x, u64 y) {
+	// @note: constexpr only if m is constexpr 
+	constexpr static u64 index(i64 x, i64 y) {
+		return x * m + y;
+	}
+
+public:
+
+	bool atIndex(u64 index) const {
 		#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
 			// @note: no bound check here..
-			return this->bullets.ptr->arr[x * m + y];
+			return this->bullets.ptr->arr[index];
 		#else
 			#if NO_BOUND_CHECKS == 1
-				return this->bullets[x * m + y].b;
+				return this->bullets[index].b;
 			#else 
-				return this->bullets.at(x * m + y).b;
+				return this->bullets.at(index).b;
 			#endif
 		#endif
 	}
-	
-	bool getRef(u64 x, u64 y) const {
+
+	bool& atIndexMut(u64 index) {
 		#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
 			// @note: no bound check here..
-			return this->bullets.ptr->arr[x * m + y];
+			return this->bullets.ptr->arr[index];
 		#else
 			#if NO_BOUND_CHECKS == 1
-				return this->bullets[x * m + y].b;
+				return this->bullets[index].b;
 			#else 
-				return this->bullets.at(x * m + y).b;
+				return this->bullets.at(index).b;
 			#endif
 		#endif
 	}
@@ -381,15 +408,15 @@ public:
 	BoolLayer& operator=(BoolLayer&& other)      = default;
 
 	bool get(Vec pos) const {
-		return getRef(pos.x, pos.y);
-	}
-
-	bool& getBoolRef(Vec pos) {
-		return getRef(pos.x, pos.y);
+		return atIndex(index(pos.x, pos.y));
 	}
 
 	void set(Vec pos, bool val) {
-		getRef(pos.x, pos.y) = val;
+		atIndexMut(index(pos.x, pos.y)) = val;
+	}
+
+	void andAt(Vec pos, bool v) {
+		atIndexMut(index(pos.x, pos.y)) &= v;
 	}
 
 	static BoolLayer fromVec(const std::vector<Vec>& vecs) {
@@ -450,11 +477,11 @@ public:
 		// for now we ignore it
 		BulletLayer new_bullets;
 
-		for (u64 i = 0; i < n; i++) {
-			for (u64 j = 0; j < m; j++) {
+		for (u64 i = 0; i < n*m; i++) {
+			// for (u64 j = 0; j < m; j++) {
 				for (auto dir: DIRECTION_ARRAY) {
-					Vec pos = {i64(i), i64(j)};
-					if (bullets.get(dir).get(pos)) {
+					Vec pos = {i64(i / m), i64(i % m)};
+					if (bullets.get(dir).atIndex(i)) {
 						Vec new_pos = pos + dirToVec(dir);
 
 						Direction new_dir = dir;
@@ -470,7 +497,7 @@ public:
 						new_bullets.addBullet(new_pos, new_dir);
 					}
 				}
-			}
+			// }
 		}
 
 
@@ -771,7 +798,7 @@ public:
 		for (i64 i = 0; i < i64(n); i++) {
 			for (i64 j = 0; j < i64(m); j++) {
 				Vec pos = {i, j};
-				ghosts.getBoolRef(pos) &= (!eliminations.get(pos));
+				ghosts.andAt(pos, !eliminations.get(pos));
 			}
 		}
 	}
