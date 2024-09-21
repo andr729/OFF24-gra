@@ -819,13 +819,15 @@ public:
 		return ghosts;
 	}
 
-	u64 ghostCount() const {
-		u64 count = 0;
-		for (i64 i = 0; i < i64(n*m); i++) {
-			count += ghosts.atIndex(i);
-		}
-		return count;
-	}
+	// [[maybe_unused]]
+	// [[gnu::cold]]
+	// u64 ghostCount() const {
+	// 	u64 count = 0;
+	// 	for (i64 i = 0; i < i64(n*m); i++) {
+	// 		count += ghosts.atIndex(i);
+	// 	}
+	// 	return count;
+	// }
 
 	void eliminateGhostsAt(const BoolLayer& eliminations) {
 		for (i64 i = 0; i < i64(n*m); i++) {
@@ -867,9 +869,8 @@ public:
 				if (ghosts.atIndex(pos)) {
 					for (auto dir: DIRECTION_ARRAY) {
 						auto new_pos = moveIndexPos(pos, dir);
-						if (not walls.atIndex(new_pos)) {
-							new_ghosts.atIndexMut(new_pos) = true;
-						}
+						new_ghosts.atIndexMut(new_pos) |= 
+							(not walls.atIndex(new_pos));
 					}
 				}
 			// }
