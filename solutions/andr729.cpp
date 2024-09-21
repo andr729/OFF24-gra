@@ -828,16 +828,22 @@ public:
 		}
 	}
 
+	/**
+	 * @param bullets 
+	 * @return u64 number of ghosts after elimination (@TODO)
+	 */
 	void eliminateGhostsAt(const BulletLayer& bullets) {
 		// @note: isBulletAt is way faster then eliminateGhostsAt x4
+		// u64 count = 0;
 		for (i64 i = 0; i < i64(n*m); i++) {
 			// for (i64 j = 0; j < i64(m); j++) {
 				// Vec pos = {i, j};
-				if (bullets.isBulletAtIndex(i)) {
-					ghosts.atIndexMut(i) = false;
-				}
+				ghosts.atIndexMut(i) &= (!bullets.isBulletAtIndex(i));
+
+				// count += ghosts.atIndex(i);
 			// }
 		}
+		// return count;
 	}
 
 	void moveGhostsEverywhere(const BoolLayer& walls) {
