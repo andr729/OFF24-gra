@@ -702,6 +702,19 @@ public:
 
 		ghosts = std::move(new_ghosts);
 	}
+
+	void shootOnLayer(BulletLayer& bullets) const {
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
+				Vec pos = {i, j};
+				if (ghosts.get(pos)) {
+					for (auto dir: DIRECTION_ARRAY) {
+						bullets.addBullet(pos, dir);
+					}
+				}
+			}
+		}
+	}
 };
 
 struct GameState {
@@ -838,9 +851,9 @@ struct GameState {
 		for (u64 i = 0; i < MAX_ROUND_LOOKUP; i++) {
 			// sim step:
 
-			// TODO: ghost shoot:
-			// Hero c adds to hero_c_bullets
-			// Enemy c add to enemy_c_bullets
+			// ghost shoots:
+			hero_c_ghosts.shootOnLayer(hero_c_bullets);
+			enemy_c_ghosts.shootOnLayer(enemy_c_bullets);
 			
 			// move ghosts:
 			hero_c_ghosts.moveGhostsEverywhere();
