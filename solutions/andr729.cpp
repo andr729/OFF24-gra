@@ -80,6 +80,20 @@ enum class Direction {
 	RIGHT = 3,
 };
 
+constexpr i64 moveIndexPos(i64 index, Direction dir) {
+	switch (dir) {
+		case Direction::UP:
+			return index - m;
+		case Direction::DOWN:
+			return index + m;
+		case Direction::LEFT:
+			return index - 1;
+		case Direction::RIGHT:
+			return index + 1;
+	}
+	assert(false);
+}
+
 [[gnu::cold]]
 constexpr char dirToChar(Direction dir) {
 	switch (dir) {
@@ -451,10 +465,22 @@ public:
 		bullets.get(dir).set(pos, true);
 	}
 
+	void addBulletAtIndex(i64 pos, Direction dir) {
+		bullets.get(dir).atIndexMut(pos) = true;
+	}
+
 	bool isBulletAt(Vec pos) const {
 		bool res = false;
 		for (auto dir: DIRECTION_ARRAY) {
 			res |= bullets.get(dir).get(pos);
+		}
+		return res;
+	}
+
+	bool isBulletAtIndex(i64 pos) const {
+		bool res = false;
+		for (auto dir: DIRECTION_ARRAY) {
+			res |= bullets.get(dir).atIndex(pos);
 		}
 		return res;
 	}
@@ -480,21 +506,23 @@ public:
 		for (u64 i = 0; i < n*m; i++) {
 			// for (u64 j = 0; j < m; j++) {
 				for (auto dir: DIRECTION_ARRAY) {
-					Vec pos = {i64(i / m), i64(i % m)};
+					// Vec pos = {i64(i / m), i64(i % m)};
+					i64 pos = i;
 					if (bullets.get(dir).atIndex(i)) {
-						Vec new_pos = pos + dirToVec(dir);
+						// Vec new_pos = pos + dirToVec(dir);
+						i64 new_pos = moveIndexPos(i, dir);
 
 						Direction new_dir = dir;
 
 						// @TODO: for now we don't check for out of bounds here.
 						// it should never happen for valid inputs.
 
-						if (walls.get(new_pos)) {
+						if (walls.atIndex(new_pos)) {
 							new_dir = flip(dir);
 							new_pos = pos;
 						}
 
-						new_bullets.addBullet(new_pos, new_dir);
+						new_bullets.addBulletAtIndex(new_pos, new_dir);
 					}
 				}
 			// }
@@ -786,32 +814,29 @@ public:
 
 	u64 ghostCount() const {
 		u64 count = 0;
-		for (i64 i = 0; i < i64(n); i++) {
-			for (i64 j = 0; j < i64(m); j++) {
-				count += ghosts.get({i, j});
-			}
+		for (i64 i = 0; i < i64(n*m); i++) {
+			count += ghosts.atIndex(i);
 		}
 		return count;
 	}
 
 	void eliminateGhostsAt(const BoolLayer& eliminations) {
-		for (i64 i = 0; i < i64(n); i++) {
-			for (i64 j = 0; j < i64(m); j++) {
-				Vec pos = {i, j};
-				ghosts.andAt(pos, !eliminations.get(pos));
-			}
+		for (i64 i = 0; i < i64(n*m); i++) {
+			// for (i64 j = 0; j < i64(m); j++) {
+				ghosts.atIndexMut(i) &= (!eliminations.atIndex(i));
+			// }
 		}
 	}
 
 	void eliminateGhostsAt(const BulletLayer& bullets) {
 		// @note: isBulletAt is way faster then eliminateGhostsAt x4
-		for (i64 i = 0; i < i64(n); i++) {
-			for (i64 j = 0; j < i64(m); j++) {
-				Vec pos = {i, j};
-				if (bullets.isBulletAt(pos)) {
-					ghosts.set(pos, false);
+		for (i64 i = 0; i < i64(n*m); i++) {
+			// for (i64 j = 0; j < i64(m); j++) {
+				// Vec pos = {i, j};
+				if (bullets.isBulletAtIndex(i)) {
+					ghosts.atIndexMut(i) = false;
 				}
-			}
+			// }
 		}
 	}
 
@@ -823,33 +848,34 @@ public:
 
 		BoolLayer new_ghosts = ghosts;
 
-		for (i64 i = 0; i < i64(n); i++) {
-			for (i64 j = 0; j < i64(m); j++) {
-				Vec pos = {i, j};
-				if (ghosts.get(pos)) {
-					for (auto dir_vec: DIR_VEC_ARRAY) {
-						Vec new_pos = pos + dir_vec;
-						if (not walls.get(new_pos)) {
-							new_ghosts.set(new_pos, true);
+		for (i64 i = 0; i < i64(n*m); i++) {
+			// for (i64 j = 0; j < i64(m); j++) {
+
+				auto pos = i;
+				if (ghosts.atIndex(pos)) {
+					for (auto dir: DIRECTION_ARRAY) {
+						auto new_pos = moveIndexPos(pos, dir);
+						if (not walls.atIndex(new_pos)) {
+							new_ghosts.atIndexMut(new_pos) = true;
 						}
 					}
 				}
-			}
+			// }
 		}
 
-		ghosts = std::move(new_ghosts);
+		this->ghosts = std::move(new_ghosts);
 	}
 
 	void shootOnLayer(BulletLayer& bullets) const {
-		for (i64 i = 0; i < i64(n); i++) {
-			for (i64 j = 0; j < i64(m); j++) {
-				Vec pos = {i, j};
-				if (ghosts.get(pos)) {
+		for (i64 i = 0; i < i64(n*m); i++) {
+			// for (i64 j = 0; j < i64(m); j++) {
+				// Vec pos = {i, j};
+				if (ghosts.atIndex(i)) {
 					for (auto dir: DIRECTION_ARRAY) {
-						bullets.addBullet(pos, dir);
+						bullets.addBulletAtIndex(i, dir);
 					}
 				}
-			}
+			// }
 		}
 	}
 };
@@ -963,7 +989,7 @@ struct GameState {
 		}
 
 		// no hero hit
-		// not enemy hit
+		// no enemy hit
 
 		SurvivalData hero_u;
 		SurvivalData hero_c;
@@ -1051,7 +1077,6 @@ struct ABGameState {
 	// We might try to change it in the future.  
 	std::optional<Move> hero_move_commit;
 };
-
 
 namespace alpha_beta {
 	template<bool INITIAL>
@@ -1174,6 +1199,7 @@ namespace alpha_beta {
 	}
 }
 
+[[gnu::cold]]
 Move findBestHeroMove(GameState state) {
 	ABGameState ab_state = {std::move(state), std::nullopt};
 	auto res = alpha_beta::alphaBeta<true, true>(
@@ -1193,6 +1219,7 @@ Move findBestHeroMove(GameState state) {
  * @note: it sets globals n, m, round_number
  * @return GameState 
  */
+[[gnu::cold]]
 GameState readInput() {
 	{
 		#if CONST_NM == 1
