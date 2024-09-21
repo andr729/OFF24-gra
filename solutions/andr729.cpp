@@ -3,8 +3,11 @@
 #include <vector>
 #include <array>
 #include <optional>
+#include <memory>
 
 namespace {
+
+#define CONST_NM yes
 
 // @opt: optional constexpr n, m
 // @opt: debug/release mode (with macros, so we don't waste opt passes)
@@ -33,8 +36,13 @@ namespace conf {
 /*******************/
 // Global parameters:
 
-static u64 n;
-static u64 m;
+#if CONST_NM == yes
+	constexpr u64 n = 15;
+	constexpr u64 m = 20;
+#else
+	static u64 n;
+	static u64 m;
+#endif
 
 constexpr u64 MAX_ROUND = 400;
 static u64 round_number;
@@ -168,6 +176,13 @@ constexpr Vec dirToVec(Direction dir) {
 	assert(false);
 }
 
+constexpr std::array<Vec, 4> DIR_VEC_ARRAY = {
+	dirToVec(Direction::UP),
+	dirToVec(Direction::DOWN),
+	dirToVec(Direction::LEFT),
+	dirToVec(Direction::RIGHT)
+};
+
 constexpr Direction flip(Direction dir) {
 	switch (dir) {
 		case Direction::UP:
@@ -263,7 +278,6 @@ void skipNewLine() {
 	assert(c == '\n');
 }
 
-
 // cause std...
 struct Bool {
 	bool b;
@@ -271,21 +285,76 @@ struct Bool {
 
 struct BoolLayer {
 private:
-	std::vector<Bool> bullets;
+	// #if CONST_NM == yes
+	// 	struct BoolArr {
+	// 		// @TODO: does it work?
+	// 		bool arr[n][m] = { false };
+
+	// 		// BoolArr() = default;
+	// 		// BoolArr(const BoolArr& other) {
+	// 		// 	// @opt: memcpy
+	// 		// 	for (u64 i = 0; i < n; i++) {
+	// 		// 		for (u64 j = 0; j < m; j++) {
+	// 		// 			arr[i][j] = other.arr[i][j];
+	// 		// 		}
+	// 		// 	}
+	// 		// }
+	// 		// BoolArr(BoolArr&& other) = delete;
+	// 		// // BoolArr& operator=(const BoolArr& other) = default;
+	// 		// // BoolArr& operator=(BoolArr&& other) = default;
+	// 	};
+	// 	struct BoolArrPtr {
+	// 		std::unique_ptr<BoolArr> ptr;
+
+	// 		BoolArrPtr(): ptr(std::make_unique<BoolArr>()) {}
+	// 		BoolArrPtr(const BoolArrPtr& other) {
+	// 			ptr = std::make_unique<BoolArr>(*other.ptr);
+	// 		}
+	// 		BoolArrPtr(BoolArrPtr&& other) = default;
+	// 		BoolArrPtr& operator=(const BoolArrPtr& other) {
+	// 			// @opt: memcpy
+	// 			for (u64 i = 0; i < n; i++) {
+	// 				for (u64 j = 0; j < m; j++) {
+	// 					ptr->arr[i][j] = other.ptr->arr[i][j];
+	// 				}
+	// 			}
+	// 			return *this;
+	// 		};
+	// 		BoolArrPtr& operator=(BoolArrPtr&& other) = default;
+	// 	};
+	// 	BoolArrPtr bullets;
+	// 	// @note: having in on stack might be bad
+	// #else
+		std::vector<Bool> bullets;
+	// #endif
 
 	bool& getRef(u64 x, u64 y) {
 		// @opt: test []
-		return this->bullets.at(x * m + y).b;
+		// #if CONST_NM == yes
+		// 	// @note: no bound check here..
+		// 	return this->bullets.ptr->arr[x][y];
+		// #else
+			return this->bullets.at(x * m + y).b;
+		// #endif
 	}
 	
 	bool getRef(u64 x, u64 y) const {
 		// @opt: test []
-		return this->bullets.at(x * m + y).b;
+		// #if CONST_NM == yes
+		// 	// @note: no bound check here..
+		// 	return this->bullets.ptr->arr[x][y];
+		// #else
+			return this->bullets.at(x * m + y).b;
+		// #endif
 	}
 
 public:
-	BoolLayer(): bullets(n * m, {false}) {}
-	
+	// #if CONST_NM == yes
+	// 	BoolLayer() = default;
+	// #else
+		BoolLayer(): bullets(n * m, {false}) {}
+	// #endif
+
 	BoolLayer(const BoolLayer& other) = default;
 	BoolLayer(BoolLayer&& other)      = default;
 
@@ -362,8 +431,7 @@ public:
 				for (auto dir: DIRECTION_ARRAY) {
 					Vec pos = {i64(i), i64(j)};
 					if (bullets.get(dir).get(pos)) {
-						Vec new_pos = pos;
-						new_pos += dirToVec(dir);
+						Vec new_pos = pos + dirToVec(dir);
 
 						Direction new_dir = dir;
 
@@ -698,8 +766,8 @@ public:
 			for (i64 j = 0; j < i64(m); j++) {
 				Vec pos = {i, j};
 				if (ghosts.get(pos)) {
-					for (auto dir: DIRECTION_ARRAY) {
-						Vec new_pos = pos + dirToVec(dir);
+					for (auto dir_vec: DIR_VEC_ARRAY) {
+						Vec new_pos = pos + dir_vec;
 						new_ghosts.set(new_pos, true);
 					}
 				}
@@ -1055,9 +1123,15 @@ Move findBestHeroMove(GameState state) {
  */
 GameState readInput() {
 	{
-		std::cin >> ::n >> ::m;
-		// assert(n == N);
-		// assert(m == M);
+		#if CONST_NM == yes
+			u64 local_n, local_m;
+			std::cin >> local_n >> local_m;
+			assert(n == local_n);
+			assert(m == local_m);
+		#else 
+			std::cin >> ::n >> ::m;
+		#endif
+		
 		skipNewLine();
 		global_params_set = true;
 	}
