@@ -14,7 +14,7 @@ using i64 = int64_t;
 
 namespace conf {
 	constexpr u64 MAX_ROUND_LOOKUP = 8;
-	constexpr u64 AB_DEPTH = 2;
+	constexpr u64 AB_DEPTH = 3;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;
@@ -1212,7 +1212,7 @@ int main() {
 	auto best_move = findBestHeroMove(std::move(game_state));
 	std::cout << moveToIndex(best_move) << "\n";
 
-	std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
+	// std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
 	// exampleScenario(game_state);
 	// ghostTest(game_state);
