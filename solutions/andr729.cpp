@@ -15,6 +15,7 @@ namespace {
 
 using u64 = uint64_t;
 using i64 = int64_t;
+using i32 = int32_t;
 
 namespace conf {
 	constexpr u64 MAX_ROUND_LOOKUP = 8;
@@ -141,6 +142,10 @@ enum class Player {
 	HERO  = 0,
 	ENEMY = 1,
 };
+
+constexpr u64 playerToIndex(Player player) {
+	return static_cast<std::underlying_type_t<Player>>(player);
+}
 
 struct Vec {
 	i64 x = 0;
@@ -459,20 +464,20 @@ public:
 
 
 struct SurvivalData {
-	// opt: using i32 here may be faster
-	// due to lower stack usage
+	// @note: using i32 here seams be faster
+	// (probably due to lower stack usage)
 	// @note: signed, so -1 will not cause bugs
 
 	/**
 	 * @note: round count is capped
 	 */
-	i64 round_count = 0;
+	i32 round_count = 0;
 
 	/**
 	 * @brief 0 if round count was not capped.
 	 * count of ghost at the end if it was.
 	 */
-	i64 ghost_count = 0;
+	i32 ghost_count = 0;
 
 	double doubleScore() const {
 		return round_count * conf::ROUND_COEFF + ghost_count;
@@ -646,29 +651,19 @@ public:
 	PlayerPositions(Vec hero, Vec enemy): player_positions{hero, enemy} {}
 
 	Vec getPosition(Player player) const {
-		// @OPT: use static cast here
-		if (player == Player::HERO) {
-			return player_positions[0];
-		} else {
-			return player_positions[1];
-		}
+		return player_positions[playerToIndex(player)];
 	}
 
 	Vec& getPosition(Player player) {
-		// @OPT: use static cast here
-		if (player == Player::HERO) {
-			return player_positions[0];
-		} else {
-			return player_positions[1];
-		}
+		return player_positions[playerToIndex(player)];
 	}
 
 	Vec getHeroPosition() const {
-		return player_positions[0];
+		return player_positions[playerToIndex(Player::HERO)];
 	}
 
 	Vec getEnemyPosition() const {
-		return player_positions[1];
+		return player_positions[playerToIndex(Player::ENEMY)];
 	}
 };
 
