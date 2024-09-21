@@ -6,6 +6,10 @@
 
 namespace {
 
+// @TODO: put evaluation config in one place
+// @opt: optional constexpr n, m
+// @opt: debug/release mode (with macros, so we don't waste opt passes)
+
 using u64 = uint64_t;
 using i64 = int64_t;
 
@@ -388,6 +392,11 @@ struct SurvivalData {
 	 * count of ghost at the end if it was.
 	 */
 	i64 ghost_count = 0;
+
+	double doubleScore() const {
+		constexpr static double ROUND_COEFF = 100.0;
+		return round_count * ROUND_COEFF + ghost_count;
+	}
 };
 
 struct PositionEvaluation {
@@ -454,14 +463,23 @@ public:
 		if (not hero_hit and enemy_hit) return true;
 
 		// @TODO: do we want it?
-		// // indirect:
-		// if (hero_unconditional.round_count > enemy_conditional.round_count)
-		// 	return true;
+		// It does not take into account the round count.
+		// indirect:
+		if (hero_unconditional.round_count > enemy_conditional.round_count)
+			return true;
 
 		return false;
 	}
 	constexpr bool isLosing() const {
-		return hero_hit and not enemy_hit;
+		if (hero_hit and not enemy_hit) return true;
+
+		// @TODO: do we want it?
+		// It does not take into account round count.
+		// indirect:
+		if (hero_conditional.round_count < enemy_unconditional.round_count)
+			return true;
+
+		return false;
 	}
 	constexpr bool isDraw() const {
 		return hero_hit and enemy_hit;
@@ -482,6 +500,23 @@ public:
 			return 0;
 		}
 		assert(false);
+	}
+
+	/**
+	 * @todo: double vs i64
+	 */
+	double getDoubleScore() const {
+		// Those values are arbitrary for now:
+		constexpr static double HERO_C_COEFF  = 16.0;
+		constexpr static double HERO_U_COEFF  = 1.0;
+		constexpr static double ENEMY_U_COEFF = -1.0;
+		constexpr static double ENEMY_C_COEFF = -8.0;
+
+		return 
+			HERO_C_COEFF  * hero_conditional.doubleScore() +
+			HERO_U_COEFF  * hero_unconditional.doubleScore() +
+			ENEMY_U_COEFF * enemy_unconditional.doubleScore() +
+			ENEMY_C_COEFF * enemy_conditional.doubleScore();
 	}
 
 	/**
@@ -506,9 +541,6 @@ public:
 			// non-determined is better then losing (even tho it might also be lost)
 			return false;
 		}
-		if (other.isDraw()) {
-			// the hard case..
-		}
 		
 		if (this->isWining()) {
 			// we are better
@@ -518,14 +550,12 @@ public:
 			// we are worse
 			return true;
 		}
-		if (this->isDraw()) {
-			// the hard case..
-		}
 
 		// now both are non-determined or
 		// one is non-determined and the other is drawing
+		// @TODO: draw score should be zero, but that has to be tested
 
-		return false;
+		return this->getDoubleScore() < other.getDoubleScore();
 	}
 
 	bool operator>(const PositionEvaluation& other) const {
@@ -774,8 +804,8 @@ struct GameState {
 	PositionEvaluation evaluate() const {
 		// @TODO...
 		// this will be a bigger part of the code
-		bool hero_hit = bullets.isBulletAt(players.getHeroPosition();
-		bool enemy_hit = bullets.isBulletAt(players.getEnemyPosition();
+		bool hero_hit = bullets.isBulletAt(players.getHeroPosition());
+		bool enemy_hit = bullets.isBulletAt(players.getEnemyPosition());
 
 		if (hero_hit or enemy_hit) {
 			return {
@@ -783,6 +813,9 @@ struct GameState {
 				bullets.isBulletAt(players.getEnemyPosition())
 			};
 		}
+
+		// @TODO
+		assert (false);
 	}
 };
 
