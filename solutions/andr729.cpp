@@ -744,12 +744,15 @@ public:
 	}
 
 	void eliminateGhostsAt(const BulletLayer& bullets) {
-		// @opt: test if it is faset to use isBulletAt
-
-		eliminateGhostsAt(bullets.getBullets(Direction::UP));
-		eliminateGhostsAt(bullets.getBullets(Direction::DOWN));
-		eliminateGhostsAt(bullets.getBullets(Direction::LEFT));
-		eliminateGhostsAt(bullets.getBullets(Direction::RIGHT));
+		// @note: isBulletAt is way faster then eliminateGhostsAt x4
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
+				Vec pos = {i, j};
+				if (bullets.isBulletAt(pos)) {
+					ghosts.set(pos, false);
+				}
+			}
+		}
 	}
 
 	void moveGhostsEverywhere() {
