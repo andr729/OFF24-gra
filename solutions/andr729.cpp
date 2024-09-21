@@ -3,14 +3,38 @@
 #include <vector>
 #include <array>
 #include <optional>
+// #include <memory>
 
 namespace {
 
+#define CONST_NM 1
+#define NO_VECTOR_IF_POSSIBLE 0
+#define LEAK_NO_VEC_MEM 0
+#define NO_BOUND_CHECKS 1
+#define NO_OTHER_CHECKS 1
+
+// @opt: debug/release mode (with macros, so we don't waste opt passes)
+
 using u64 = uint64_t;
 using i64 = int64_t;
+using i32 = int32_t;
 
-// @TODO: make it bigger when cutoffs are efficient
-constexpr u64 AB_DEPTH = 4;
+namespace conf {
+	// note: we want to optimize it so we have 12/3 here
+	constexpr u64 MAX_ROUND_LOOKUP = 8;
+	constexpr u64 AB_DEPTH = 2;
+
+	// round vs ghost count
+	constexpr double ROUND_COEFF = 1024.0;
+
+	// @TODO: optimize those parameters:
+	// Those values are arbitrary for now:
+	constexpr double HERO_C_COEFF  = 8.0;
+	constexpr double HERO_U_COEFF  = 1.0;
+	constexpr double ENEMY_U_COEFF = -8.0;
+	constexpr double ENEMY_C_COEFF = -1.0;
+}
+
 
 // constexpr u64 N = 15;
 // constexpr u64 M = 20;
@@ -18,8 +42,13 @@ constexpr u64 AB_DEPTH = 4;
 /*******************/
 // Global parameters:
 
-static u64 n;
-static u64 m;
+#if CONST_NM == 1
+	constexpr u64 n = 15;
+	constexpr u64 m = 20;
+#else
+	static u64 n;
+	static u64 m;
+#endif
 
 constexpr u64 MAX_ROUND = 400;
 static u64 round_number;
@@ -97,6 +126,7 @@ constexpr Direction moveToDir(Move move) {
 	}
 }
 
+// @OPT: change the order maybe?
 constexpr std::array<Move, 9> MOVE_ARRAY = {
 	Move::GO_UP,
 	Move::GO_DOWN,
@@ -106,7 +136,7 @@ constexpr std::array<Move, 9> MOVE_ARRAY = {
 	Move::SHOOT_DOWN,
 	Move::SHOOT_LEFT,
 	Move::SHOOT_RIGHT,
-	Move::WAIT
+	Move::WAIT,
 };
 
 auto moveToIndex(Move move) {
@@ -117,6 +147,10 @@ enum class Player {
 	HERO  = 0,
 	ENEMY = 1,
 };
+
+constexpr u64 playerToIndex(Player player) {
+	return static_cast<std::underlying_type_t<Player>>(player);
+}
 
 struct Vec {
 	i64 x = 0;
@@ -152,6 +186,13 @@ constexpr Vec dirToVec(Direction dir) {
 	}
 	assert(false);
 }
+
+constexpr std::array<Vec, 4> DIR_VEC_ARRAY = {
+	dirToVec(Direction::UP),
+	dirToVec(Direction::DOWN),
+	dirToVec(Direction::LEFT),
+	dirToVec(Direction::RIGHT)
+};
 
 constexpr Direction flip(Direction dir) {
 	switch (dir) {
@@ -248,7 +289,6 @@ void skipNewLine() {
 	assert(c == '\n');
 }
 
-
 // cause std...
 struct Bool {
 	bool b;
@@ -256,19 +296,85 @@ struct Bool {
 
 struct BoolLayer {
 private:
-	std::vector<Bool> bullets;
+	#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
+		struct BoolArr {
+			// @TODO: does it work?
+			bool arr[n * m] = { false };
+		};
+		struct BoolArrPtr {
+			BoolArr* ptr;
+
+			BoolArrPtr(): ptr(new BoolArr()) {}
+			BoolArrPtr(const BoolArrPtr& other) {
+				ptr = new BoolArr(*other.ptr);
+			}
+			BoolArrPtr(BoolArrPtr&& other) {
+				ptr = other.ptr;
+				other.ptr = nullptr;
+			};
+			BoolArrPtr& operator=(const BoolArrPtr& other) {
+				// @opt: memcpy
+				for (u64 i = 0; i < n * m; i++) {
+					ptr->arr[i] = other.ptr->arr[i];
+				}
+				return *this;
+			};
+			BoolArrPtr& operator=(BoolArrPtr&& other) {
+				// @opt: memcpy
+				for (u64 i = 0; i < n * m; i++) {
+					ptr->arr[i] = other.ptr->arr[i];
+				}
+				return *this;
+			}
+
+			~BoolArrPtr() {
+				#if LEAK_NO_VEC_MEM == 1
+					// do nothing
+				#else
+					delete ptr;
+				#endif
+			}
+		};
+
+		BoolArrPtr bullets;
+		// @note: having in on stack might be bad
+	#else
+		std::vector<Bool> bullets;
+	#endif
 
 	bool& getRef(u64 x, u64 y) {
-		return this->bullets.at(x * m + y).b;
+		#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
+			// @note: no bound check here..
+			return this->bullets.ptr->arr[x * m + y];
+		#else
+			#if NO_BOUND_CHECKS == 1
+				return this->bullets[x * m + y].b;
+			#else 
+				return this->bullets.at(x * m + y).b;
+			#endif
+		#endif
 	}
 	
 	bool getRef(u64 x, u64 y) const {
-		return this->bullets.at(x * m + y).b;
+		#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
+			// @note: no bound check here..
+			return this->bullets.ptr->arr[x * m + y];
+		#else
+			#if NO_BOUND_CHECKS == 1
+				return this->bullets[x * m + y].b;
+			#else 
+				return this->bullets.at(x * m + y).b;
+			#endif
+		#endif
 	}
 
 public:
-	BoolLayer(): bullets(n * m, {false}) {}
-	
+	#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
+		BoolLayer() = default;
+	#else
+		BoolLayer(): bullets(n * m, {false}) {}
+	#endif
+
 	BoolLayer(const BoolLayer& other) = default;
 	BoolLayer(BoolLayer&& other)      = default;
 
@@ -276,6 +382,10 @@ public:
 	BoolLayer& operator=(BoolLayer&& other)      = default;
 
 	bool get(Vec pos) const {
+		return getRef(pos.x, pos.y);
+	}
+
+	bool& getBoolRef(Vec pos) {
 		return getRef(pos.x, pos.y);
 	}
 
@@ -294,6 +404,7 @@ public:
 
 struct BulletLayer {
 private:
+	// @opt: reversing the "storage dims" here might be faster
 	QuadDirStorage<BoolLayer> bullets;
 
 public:
@@ -305,6 +416,10 @@ public:
 	BulletLayer(BulletLayer&& other)      = default;
 	
 	BulletLayer& operator=(BulletLayer&& other) = default;
+
+	const BoolLayer& getBullets(Direction dir) const {
+		return bullets.get(dir);
+	}
 
 	void addBullet(Vec pos, Direction dir) {
 		bullets.get(dir).set(pos, true);
@@ -336,13 +451,12 @@ public:
 		// for now we ignore it
 		BulletLayer new_bullets;
 
-		for (auto dir: DIRECTION_ARRAY) {
-			for (u64 i = 0; i < n; i++) {
-				for (u64 j = 0; j < m; j++) {
+		for (u64 i = 0; i < n; i++) {
+			for (u64 j = 0; j < m; j++) {
+				for (auto dir: DIRECTION_ARRAY) {
 					Vec pos = {i64(i), i64(j)};
 					if (bullets.get(dir).get(pos)) {
-						Vec new_pos = pos;
-						new_pos += dirToVec(dir);
+						Vec new_pos = pos + dirToVec(dir);
 
 						Direction new_dir = dir;
 
@@ -364,21 +478,27 @@ public:
 		// @TODO: make sure it actually moves:
 		*this = std::move(new_bullets);
 	}
+};
 
-	[[gnu::cold]]
-	void debugPrint() {
-		// simple for now
-		for (u64 i = 0; i < n; i++) {
-			for (u64 j = 0; j < m; j++) {
-				Vec pos = {i64(i), i64(j)};
-				if (isBulletAt(pos)) {
-					std::cout << '*';
-				} else {
-					std::cout << " ";
-				}
-			}
-			std::cout << "\n";
-		}
+
+struct SurvivalData {
+	// @note: using i32 here seams be faster
+	// (probably due to lower stack usage)
+	// @note: signed, so -1 will not cause bugs
+
+	/**
+	 * @note: round count is capped
+	 */
+	i32 round_count = 0;
+
+	/**
+	 * @brief 0 if round count was not capped.
+	 * count of ghost at the end if it was.
+	 */
+	i32 ghost_count = 0;
+
+	double doubleScore() const {
+		return round_count * conf::ROUND_COEFF + ghost_count;
 	}
 };
 
@@ -398,11 +518,39 @@ private:
 	//
 	// Future:
 	// * ghost don't do illogical moves
-	// 
+	//
+
+	// @note: conditional: if other player is chilling
+	// @note: unconditional: no mather what other player will do
+
+	SurvivalData hero_conditional;
+	SurvivalData hero_unconditional;
+
+	SurvivalData enemy_conditional;
+	SurvivalData enemy_unconditional;
 
 public:
 	constexpr PositionEvaluation(bool hero_hit, bool enemy_hit):
-		hero_hit(hero_hit), enemy_hit(enemy_hit) {}
+		hero_hit(hero_hit), enemy_hit(enemy_hit) {
+		
+		// only of these may hold:
+		assert(not (isWining() and isLosing()));
+		assert(not (isWining() and isDraw()));
+		assert(not (isLosing() and isDraw()));
+	}
+
+	constexpr PositionEvaluation(
+		SurvivalData hero_conditional,
+		SurvivalData hero_unconditional,
+	    SurvivalData enemy_conditional,
+		SurvivalData enemy_unconditional):
+		
+		hero_hit(false), enemy_hit(false),
+		hero_conditional(hero_conditional),
+		hero_unconditional(hero_unconditional),
+		enemy_conditional(enemy_conditional),
+		enemy_unconditional(enemy_unconditional)
+	{}
 
 
 	constexpr static PositionEvaluation losing() {
@@ -414,13 +562,60 @@ public:
 	}
 
 	constexpr bool isWining() const {
-		return not hero_hit and enemy_hit;
+		// direct:
+		if (not hero_hit and enemy_hit) return true;
+
+		// @TODO: do we want it?
+		// It does not take into account the round count.
+		// indirect:
+		if (hero_unconditional.round_count > enemy_conditional.round_count)
+			return true;
+
+		return false;
 	}
 	constexpr bool isLosing() const {
-		return hero_hit and not enemy_hit;
+		if (hero_hit and not enemy_hit) return true;
+
+		// @TODO: do we want it?
+		// It does not take into account round count.
+		// indirect:
+		if (hero_conditional.round_count < enemy_unconditional.round_count)
+			return true;
+
+		return false;
 	}
 	constexpr bool isDraw() const {
 		return hero_hit and enemy_hit;
+	}
+
+	constexpr bool determined() const {
+		return isWining() or isLosing() or isDraw();
+	}
+
+	constexpr i64 determinedToInt() const {
+		if (isWining()) {
+			return 1;
+		}
+		if (isLosing()) {
+			return -1;
+		}
+		if (isDraw()) {
+			return 0;
+		}
+		assert(false);
+	}
+
+	/**
+	 * @todo: double vs i64
+	 */
+	double getDoubleScore() const {
+		
+
+		return 
+			conf::HERO_C_COEFF  * hero_conditional.doubleScore() +
+			conf::HERO_U_COEFF  * hero_unconditional.doubleScore() +
+			conf::ENEMY_U_COEFF * enemy_unconditional.doubleScore() +
+			conf::ENEMY_C_COEFF * enemy_conditional.doubleScore();
 	}
 
 	/**
@@ -431,31 +626,55 @@ public:
 
 		// @note this will get much more complicated..
 
-		// @TODO: map it to some int, and just compare it..
-		
-		if (this->isWining() and (not other.isWining())) {
-			// we are better
-			return false;
+		if (this->determined() and other.determined()) {
+			return this->determinedToInt() < other.determinedToInt();
 		}
-		if ((not this->isWining()) and other.isWining()) {
-			// we are worse
-			return true;
-		}
-		if (this->isLosing() and (not other.isLosing())) {
-			// we are worse
-			return true;
-		}
-		if ((not this->isLosing()) and other.isLosing()) {
-			// we are better
-			return false;
-		}
-		// @TODO: any other deterministic cases?
 
-		return false;
+		// now we know that at most one is determined:
+		// if other is, we are not
+		if (other.isWining()) {
+			// we are worse
+			return true;
+		}
+		if (other.isLosing()) {
+			// non-determined is better then losing (even tho it might also be lost)
+			return false;
+		}
+		
+		if (this->isWining()) {
+			// we are better
+			return false;
+		}
+		if (this->isLosing()) {
+			// we are worse
+			return true;
+		}
+
+		// now both are non-determined or
+		// one is non-determined and the other is drawing
+		// @TODO: draw score should be zero, but that has to be tested
+
+		return this->getDoubleScore() < other.getDoubleScore();
 	}
 
 	bool operator>(const PositionEvaluation& other) const {
 		return other < *this;
+	}
+
+	[[gnu::cold]]
+	void debugPrint() const {
+		if (isWining()) {
+			std::cerr << "Eval: Wining\n";
+		}
+		else if (isLosing()) {
+			std::cerr << "Eval: Losing\n";
+		}
+		else if (isDraw()) {
+			std::cerr << "Eval: Draw\n";
+		}
+		else {
+			std::cerr << "Eval: " << getDoubleScore() << "\n";
+		}
 	}
 };
 
@@ -466,29 +685,144 @@ public:
 	PlayerPositions(Vec hero, Vec enemy): player_positions{hero, enemy} {}
 
 	Vec getPosition(Player player) const {
-		// @OPT: use static cast here
-		if (player == Player::HERO) {
-			return player_positions[0];
-		} else {
-			return player_positions[1];
-		}
+		return player_positions[playerToIndex(player)];
 	}
 
 	Vec& getPosition(Player player) {
-		// @OPT: use static cast here
-		if (player == Player::HERO) {
-			return player_positions[0];
-		} else {
-			return player_positions[1];
-		}
+		return player_positions[playerToIndex(player)];
 	}
 
 	Vec getHeroPosition() const {
-		return player_positions[0];
+		return player_positions[playerToIndex(Player::HERO)];
 	}
 
 	Vec getEnemyPosition() const {
-		return player_positions[1];
+		return player_positions[playerToIndex(Player::ENEMY)];
+	}
+
+};
+
+struct DebugPrintLayer {
+private:
+	std::vector<std::vector<char>> data;
+public:
+	
+	[[gnu::cold]]
+	DebugPrintLayer(): data(n, std::vector<char>(m, ' ')) {}
+
+	[[gnu::cold]]
+	void apply(const BoolLayer& layer, char c) {
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
+				if (layer.get({i, j})) {
+					data[i][j] = c;
+				}
+			}
+		}
+	}
+
+	[[gnu::cold]]
+	void apply(const BulletLayer& layer) {
+		for (auto dir: DIRECTION_ARRAY) {
+			apply(layer.getBullets(dir), dirToChar(dir));
+		}
+	}
+
+	[[gnu::cold]]
+	void apply(const PlayerPositions& players) {
+		data[players.getHeroPosition().x][players.getHeroPosition().y] = 'H';
+		data[players.getEnemyPosition().x][players.getEnemyPosition().y] = 'E';
+	}
+
+	[[gnu::cold]]
+	void print() const {
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
+				std::cout << data[i][j];
+			}
+			std::cout << "\n";
+		}
+	}
+};
+
+struct GhostPlayerLayer {
+private:
+	// @opt: hmm.. bitsets?
+	BoolLayer ghosts;
+public:
+	GhostPlayerLayer(Vec initial_pos): ghosts() {
+		ghosts.set(initial_pos, true);
+	}
+
+	const BoolLayer& getGhosts() const {
+		return ghosts;
+	}
+
+	u64 ghostCount() const {
+		u64 count = 0;
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
+				count += ghosts.get({i, j});
+			}
+		}
+		return count;
+	}
+
+	void eliminateGhostsAt(const BoolLayer& eliminations) {
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
+				Vec pos = {i, j};
+				ghosts.getBoolRef(pos) &= (!eliminations.get(pos));
+			}
+		}
+	}
+
+	void eliminateGhostsAt(const BulletLayer& bullets) {
+		// @note: isBulletAt is way faster then eliminateGhostsAt x4
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
+				Vec pos = {i, j};
+				if (bullets.isBulletAt(pos)) {
+					ghosts.set(pos, false);
+				}
+			}
+		}
+	}
+
+	void moveGhostsEverywhere() {
+		// @todo: no bound checks here -- should not be needed
+
+		// Try to avoid copy -- apparently its very similar the way it is
+		// It may be that compiler optimizes it much better
+
+		BoolLayer new_ghosts = ghosts;
+
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
+				Vec pos = {i, j};
+				if (ghosts.get(pos)) {
+					for (auto dir_vec: DIR_VEC_ARRAY) {
+						Vec new_pos = pos + dir_vec;
+						new_ghosts.set(new_pos, true);
+					}
+				}
+			}
+		}
+
+		ghosts = std::move(new_ghosts);
+	}
+
+	void shootOnLayer(BulletLayer& bullets) const {
+		for (i64 i = 0; i < i64(n); i++) {
+			for (i64 j = 0; j < i64(m); j++) {
+				Vec pos = {i, j};
+				if (ghosts.get(pos)) {
+					for (auto dir: DIRECTION_ARRAY) {
+						bullets.addBullet(pos, dir);
+					}
+				}
+			}
+		}
 	}
 };
 
@@ -504,38 +838,11 @@ struct GameState {
 
 	[[gnu::cold]]
 	void debugPrint() const {
-		char out[n][m];
-		for (u64 i = 0; i < n; i++) {
-			for (u64 j = 0; j < m; j++) {
-				out[i][j] = ' ';
-			}
-		}
-
-		auto hero_pos = players.getHeroPosition();
-		auto enemy_pos = players.getEnemyPosition();
-
-		out[hero_pos.x][hero_pos.y] = 'U';
-		out[enemy_pos.x][enemy_pos.y] = 'E';
-
-		for (u64 i = 0; i < n; i++) {
-			for (u64 j = 0; j < m; j++) {
-				Vec pos = {i64(i), i64(j)};
-				if (walls.get(pos)) {
-					out[i][j] = '#';
-				} else if (bullets.isBulletAt(pos)) {
-					auto dir = bullets.oneDirAt(pos);
-					out[i][j] = dirToChar(dir);
-				}
-			}
-		}
-
-		for (u64 i = 0; i < n; i++) {
-			for (u64 j = 0; j < m; j++) {
-				std::cout << out[i][j];
-			}
-			std::cout << "\n";
-		}
-
+		DebugPrintLayer printer;
+		printer.apply(players);
+		printer.apply(bullets);
+		printer.apply(walls, '#');
+		printer.print();
 		std::cout << "\n";
 	}
 
@@ -617,11 +924,97 @@ struct GameState {
 	}
 
 	PositionEvaluation evaluate() const {
-		// @TODO...
-		// this will be a bigger part of the code
+		bool hero_hit = bullets.isBulletAt(players.getHeroPosition());
+		bool enemy_hit = bullets.isBulletAt(players.getEnemyPosition());
+
+		if (hero_hit or enemy_hit) {
+			return {
+				bullets.isBulletAt(players.getHeroPosition()),
+				bullets.isBulletAt(players.getEnemyPosition())
+			};
+		}
+
+		// no hero hit
+		// not enemy hit
+
+		SurvivalData hero_u;
+		SurvivalData hero_c;
+		SurvivalData enemy_u;
+		SurvivalData enemy_c;
+
+		auto lookup_bullets = this->bullets;
+
+		GhostPlayerLayer hero_c_ghosts(players.getHeroPosition());
+		GhostPlayerLayer hero_u_ghosts(players.getHeroPosition());
+
+		GhostPlayerLayer enemy_c_ghosts(players.getEnemyPosition());
+		GhostPlayerLayer enemy_u_ghosts(players.getEnemyPosition());
+
+		BulletLayer hero_c_bullets;
+		BulletLayer enemy_c_bullets;
+
+		// @TODO: make it less boilerplate'y
+
+		// @OPT making one struct here for quad opers
+		// could be way faster
+
+		for (u64 i = 0; i < conf::MAX_ROUND_LOOKUP; i++) {
+			// sim step:
+
+			// ghost shoots:
+			hero_c_ghosts.shootOnLayer(hero_c_bullets);
+			enemy_c_ghosts.shootOnLayer(enemy_c_bullets);
+			
+			// move ghosts:
+			hero_c_ghosts.moveGhostsEverywhere();
+			hero_u_ghosts.moveGhostsEverywhere();
+			enemy_c_ghosts.moveGhostsEverywhere();
+			enemy_u_ghosts.moveGhostsEverywhere();
+
+			// move bullets:
+			lookup_bullets.moveBulletsWithWalls(walls);
+			hero_c_bullets.moveBulletsWithWalls(walls);
+			enemy_c_bullets.moveBulletsWithWalls(walls);
+
+			// elim ghosts with walls:
+			hero_c_ghosts.eliminateGhostsAt(walls);
+			hero_u_ghosts.eliminateGhostsAt(walls);
+			enemy_c_ghosts.eliminateGhostsAt(walls);
+			enemy_u_ghosts.eliminateGhostsAt(walls);
+
+			// elim ghost with bullets:
+			hero_c_ghosts.eliminateGhostsAt(lookup_bullets);
+			hero_u_ghosts.eliminateGhostsAt(lookup_bullets);
+			enemy_c_ghosts.eliminateGhostsAt(lookup_bullets);
+			enemy_u_ghosts.eliminateGhostsAt(lookup_bullets);
+
+			hero_u_ghosts.eliminateGhostsAt(enemy_c_bullets);
+			enemy_u_ghosts.eliminateGhostsAt(hero_c_bullets);
+
+			if (hero_c_ghosts.ghostCount() > 0) {
+				hero_c.round_count = i + 1;
+			}
+			if (hero_u_ghosts.ghostCount() > 0) {
+				hero_u.round_count = i + 1;
+			}
+			if (enemy_c_ghosts.ghostCount() > 0) {
+				enemy_c.round_count = i + 1;
+			}
+			if (enemy_u_ghosts.ghostCount() > 0) {
+				enemy_u.round_count = i + 1;
+			}
+		}
+
+		hero_c.ghost_count  = hero_c_ghosts.ghostCount();
+		hero_u.ghost_count  = hero_u_ghosts.ghostCount();
+		enemy_c.ghost_count = enemy_c_ghosts.ghostCount();
+		enemy_u.ghost_count = enemy_u_ghosts.ghostCount();
+	
 		return {
-			bullets.isBulletAt(players.getHeroPosition()),
-			bullets.isBulletAt(players.getEnemyPosition())
+			hero_c,
+			hero_u,
+			enemy_c,
+			enemy_u
 		};
 	}
 };
@@ -646,8 +1039,9 @@ namespace alpha_beta {
 
 	template<>
 	struct ABRetType<true> {
-		using type = Move;
+		using type = std::pair<Move, PositionEvaluation>;
 	};
+
 
 	constinit static u64 leaf_counter = 0;
 
@@ -668,6 +1062,7 @@ namespace alpha_beta {
 		const u64 next_remaining_depth = IS_HERO_TURN ? remaining_depth : remaining_depth - 1;
 
 		if constexpr (IS_HERO_TURN) {
+			[[unlikely]]
 			if (remaining_depth == 0 or state.state.isTerminal()) {
 				if constexpr (INITIAL) {
 					assert(false); // static_assertion fails hare
@@ -700,7 +1095,7 @@ namespace alpha_beta {
 					value = move_value;
 					best_move = move;
 				}
-
+				
 				if (value > beta) {
 					break; // β cutoff
 				}
@@ -709,7 +1104,7 @@ namespace alpha_beta {
 			}
 
 			if constexpr (INITIAL) {
-				return best_move;
+				return { best_move, value };
 			}
 			else {
 				return value;
@@ -726,7 +1121,12 @@ namespace alpha_beta {
 				ABGameState new_state = state;
 				new_state.hero_move_commit = {};
 
-				auto hero_move = state.hero_move_commit.value();
+				#if NO_OTHER_CHECKS == 1
+					auto hero_move = *state.hero_move_commit;
+				#else
+					auto hero_move = state.hero_move_commit.value();
+				#endif
+				
 				auto enemy_move = move;
 
 				new_state.state.applyMove(hero_move, enemy_move);
@@ -754,12 +1154,17 @@ namespace alpha_beta {
 
 Move findBestHeroMove(GameState state) {
 	ABGameState ab_state = {std::move(state), std::nullopt};
-	return alpha_beta::alphaBeta<true, true>(
+	auto res = alpha_beta::alphaBeta<true, true>(
 		std::move(ab_state),
-		AB_DEPTH,
+		conf::AB_DEPTH,
 		PositionEvaluation::losing(),
 		PositionEvaluation::wining()
 	);
+
+	res.second.debugPrint();
+	std::cerr << "\n";
+
+	return res.first;
 }
 
 /** 
@@ -768,9 +1173,15 @@ Move findBestHeroMove(GameState state) {
  */
 GameState readInput() {
 	{
-		std::cin >> ::n >> ::m;
-		// assert(n == N);
-		// assert(m == M);
+		#if CONST_NM == 1
+			u64 local_n, local_m;
+			std::cin >> local_n >> local_m;
+			assert(n == local_n);
+			assert(m == local_m);
+		#else 
+			std::cin >> ::n >> ::m;
+		#endif
+		
 		skipNewLine();
 		global_params_set = true;
 	}
@@ -848,6 +1259,7 @@ GameState readInput() {
 	return game_state;
 }
 
+[[maybe_unused]]
 [[gnu::cold]]
 void exampleScenario(GameState game_state) {
 	using enum Move;
@@ -882,6 +1294,36 @@ void exampleScenario(GameState game_state) {
 	game_state.debugPrint();
 }
 
+[[maybe_unused]]
+[[gnu::cold]]
+void ghostTest(GameState game_state) {
+	auto walls = game_state.walls;
+	auto bullets = game_state.bullets;
+
+	auto ghosts = GhostPlayerLayer(game_state.players.getHeroPosition());
+
+	for (u64 i = 0; i < 20; i++) {
+		// print:
+		DebugPrintLayer printer;
+		printer.apply(ghosts.getGhosts(), 'G');
+		printer.apply(bullets);
+		printer.apply(walls, '#');
+		printer.print();
+		std::cout << "\n";
+		std::cout << std::flush;
+
+		// move:
+		ghosts.moveGhostsEverywhere();
+		bullets.moveBulletsWithWalls(walls);
+
+		// eliminations:
+		ghosts.eliminateGhostsAt(bullets);
+		ghosts.eliminateGhostsAt(walls);
+		
+		
+	}
+}
+
 }
 
 int main() {
@@ -894,10 +1336,10 @@ int main() {
 	auto best_move = findBestHeroMove(std::move(game_state));
 	std::cout << moveToIndex(best_move) << "\n";
 
-	// std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
+	std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
 	// exampleScenario(game_state);
-
+	// ghostTest(game_state);
 	
 }
 
