@@ -3,7 +3,6 @@
 #include <vector>
 #include <array>
 #include <optional>
-// #include <memory>
 
 namespace {
 
@@ -22,7 +21,7 @@ using i32 = int32_t;
 namespace conf {
 	// note: we want to optimize it so we have 12/3 here
 	constexpr u64 MAX_ROUND_LOOKUP = 8;
-	constexpr u64 AB_DEPTH = 2;
+	constexpr u64 AB_DEPTH = 4;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;
@@ -789,7 +788,7 @@ public:
 		}
 	}
 
-	void moveGhostsEverywhere() {
+	void moveGhostsEverywhere(const BoolLayer& walls) {
 		// @todo: no bound checks here -- should not be needed
 
 		// Try to avoid copy -- apparently its very similar the way it is
@@ -803,7 +802,9 @@ public:
 				if (ghosts.get(pos)) {
 					for (auto dir_vec: DIR_VEC_ARRAY) {
 						Vec new_pos = pos + dir_vec;
-						new_ghosts.set(new_pos, true);
+						if (not walls.get(new_pos)) {
+							new_ghosts.set(new_pos, true);
+						}
 					}
 				}
 			}
@@ -950,8 +951,8 @@ struct GameState {
 		GhostPlayerLayer enemy_c_ghosts(players.getEnemyPosition());
 		GhostPlayerLayer enemy_u_ghosts(players.getEnemyPosition());
 
-		BulletLayer hero_c_bullets;
-		BulletLayer enemy_c_bullets;
+		BulletLayer hero_c_bullets = lookup_bullets;
+		BulletLayer enemy_c_bullets = lookup_bullets;
 
 		// @TODO: make it less boilerplate'y
 
@@ -966,28 +967,22 @@ struct GameState {
 			enemy_c_ghosts.shootOnLayer(enemy_c_bullets);
 			
 			// move ghosts:
-			hero_c_ghosts.moveGhostsEverywhere();
-			hero_u_ghosts.moveGhostsEverywhere();
-			enemy_c_ghosts.moveGhostsEverywhere();
-			enemy_u_ghosts.moveGhostsEverywhere();
+			hero_c_ghosts.moveGhostsEverywhere(walls);
+			hero_u_ghosts.moveGhostsEverywhere(walls);
+			enemy_c_ghosts.moveGhostsEverywhere(walls);
+			enemy_u_ghosts.moveGhostsEverywhere(walls);
 
 			// move bullets:
 			lookup_bullets.moveBulletsWithWalls(walls);
 			hero_c_bullets.moveBulletsWithWalls(walls);
 			enemy_c_bullets.moveBulletsWithWalls(walls);
 
-			// elim ghosts with walls:
-			hero_c_ghosts.eliminateGhostsAt(walls);
-			hero_u_ghosts.eliminateGhostsAt(walls);
-			enemy_c_ghosts.eliminateGhostsAt(walls);
-			enemy_u_ghosts.eliminateGhostsAt(walls);
+			// elim ghosts with walls (done in moveGhostsEverywhere)
 
 			// elim ghost with bullets:
 			hero_c_ghosts.eliminateGhostsAt(lookup_bullets);
-			hero_u_ghosts.eliminateGhostsAt(lookup_bullets);
 			enemy_c_ghosts.eliminateGhostsAt(lookup_bullets);
-			enemy_u_ghosts.eliminateGhostsAt(lookup_bullets);
-
+			
 			hero_u_ghosts.eliminateGhostsAt(enemy_c_bullets);
 			enemy_u_ghosts.eliminateGhostsAt(hero_c_bullets);
 
@@ -1313,12 +1308,12 @@ void ghostTest(GameState game_state) {
 		std::cout << std::flush;
 
 		// move:
-		ghosts.moveGhostsEverywhere();
+		ghosts.moveGhostsEverywhere(walls);
 		bullets.moveBulletsWithWalls(walls);
 
 		// eliminations:
 		ghosts.eliminateGhostsAt(bullets);
-		ghosts.eliminateGhostsAt(walls);
+		// ghosts.eliminateGhostsAt(walls);
 		
 		
 	}
