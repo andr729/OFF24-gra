@@ -372,6 +372,24 @@ public:
 	}
 };
 
+
+struct SurvivalData {
+	// opt: using u32 here may be faster
+	// due to lower stack usage
+
+	/**
+	 * @note: round count is capped
+	 */
+	u64 round_count = 0;
+
+	/**
+	 * @brief 0 if round count was not capped.
+	 * count of ghost at the end if it was.
+	 */
+	u64 ghost_count = 0;
+};
+
+
 struct PositionEvaluation {
 private:
 	bool hero_hit;
@@ -388,11 +406,36 @@ private:
 	//
 	// Future:
 	// * ghost don't do illogical moves
-	// 
+	//
+
+	SurvivalData hero_conditional;
+	SurvivalData hero_unconditional;
+
+	SurvivalData enemy_conditional;
+	SurvivalData enemy_unconditional;
 
 public:
 	constexpr PositionEvaluation(bool hero_hit, bool enemy_hit):
-		hero_hit(hero_hit), enemy_hit(enemy_hit) {}
+		hero_hit(hero_hit), enemy_hit(enemy_hit) {
+		
+		// only of these may hold:
+		assert(not (isWining() and isLosing()));
+		assert(not (isWining() and isDraw()));
+		assert(not (isLosing() and isDraw()));
+	}
+
+	constexpr PositionEvaluation(
+		SurvivalData hero_conditional,
+		SurvivalData hero_unconditional,
+	    SurvivalData enemy_conditional,
+		SurvivalData enemy_unconditional):
+		
+		hero_hit(false), enemy_hit(false),
+		hero_conditional(hero_conditional),
+		hero_unconditional(hero_unconditional),
+		enemy_conditional(enemy_conditional),
+		enemy_unconditional(enemy_unconditional)
+	{}
 
 
 	constexpr static PositionEvaluation losing() {
@@ -413,6 +456,23 @@ public:
 		return hero_hit and enemy_hit;
 	}
 
+	constexpr bool determined() const {
+		return isWining() or isLosing() or isDraw();
+	}
+
+	constexpr i64 determinedToInt() const {
+		if (isWining()) {
+			return 1;
+		}
+		if (isLosing()) {
+			return -1;
+		}
+		if (isDraw()) {
+			return 0;
+		}
+		assert(false);
+	}
+
 	/**
 	 * @brief eval1 < eval2, means that eval2 is better for hero
 	 */
@@ -421,25 +481,38 @@ public:
 
 		// @note this will get much more complicated..
 
-		// @TODO: map it to some int, and just compare it..
+		if (this->determined() and other.determined()) {
+			return this->determinedToInt() < other.determinedToInt();
+		}
+
+		// now we know that at most one is determined:
+		// if other is, we are not
+		if (other.isWining()) {
+			// we are worse
+			return true;
+		}
+		if (other.isLosing()) {
+			// non-determined is better then losing (even tho it might also be lost)
+			return false;
+		}
+		if (other.isDraw()) {
+			// the hard case..
+		}
 		
-		if (this->isWining() and (not other.isWining())) {
+		if (this->isWining()) {
 			// we are better
 			return false;
 		}
-		if ((not this->isWining()) and other.isWining()) {
+		if (this->isLosing()) {
 			// we are worse
 			return true;
 		}
-		if (this->isLosing() and (not other.isLosing())) {
-			// we are worse
-			return true;
+		if (this->isDraw()) {
+			// the hard case..
 		}
-		if ((not this->isLosing()) and other.isLosing()) {
-			// we are better
-			return false;
-		}
-		// @TODO: any other deterministic cases?
+
+		// now both are non-determined or
+		// one is non-determined and the other is drawing
 
 		return false;
 	}
@@ -690,10 +763,15 @@ struct GameState {
 	PositionEvaluation evaluate() const {
 		// @TODO...
 		// this will be a bigger part of the code
-		return {
-			bullets.isBulletAt(players.getHeroPosition()),
-			bullets.isBulletAt(players.getEnemyPosition())
-		};
+		bool hero_hit = bullets.isBulletAt(players.getHeroPosition();
+		bool enemy_hit = bullets.isBulletAt(players.getEnemyPosition();
+
+		if (hero_hit or enemy_hit) {
+			return {
+				bullets.isBulletAt(players.getHeroPosition()),
+				bullets.isBulletAt(players.getEnemyPosition())
+			};
+		}
 	}
 };
 
