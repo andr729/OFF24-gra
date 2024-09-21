@@ -6,15 +6,26 @@
 
 namespace {
 
-// @TODO: put evaluation config in one place
 // @opt: optional constexpr n, m
 // @opt: debug/release mode (with macros, so we don't waste opt passes)
 
 using u64 = uint64_t;
 using i64 = int64_t;
 
-// @TODO: make it bigger when cutoffs are efficient
-constexpr u64 AB_DEPTH = 4;
+namespace conf {
+	constexpr u64 MAX_ROUND_LOOKUP = 8;
+	constexpr u64 AB_DEPTH = 2;
+
+	// round vs ghost count
+	constexpr double ROUND_COEFF = 1024.0;
+
+	// Those values are arbitrary for now:
+	constexpr double HERO_C_COEFF  = 16.0;
+	constexpr double HERO_U_COEFF  = 1.0;
+	constexpr double ENEMY_U_COEFF = -1.0;
+	constexpr double ENEMY_C_COEFF = -8.0;
+}
+
 
 // constexpr u64 N = 15;
 // constexpr u64 M = 20;
@@ -394,8 +405,7 @@ struct SurvivalData {
 	i64 ghost_count = 0;
 
 	double doubleScore() const {
-		constexpr static double ROUND_COEFF = 100.0;
-		return round_count * ROUND_COEFF + ghost_count;
+		return round_count * conf::ROUND_COEFF + ghost_count;
 	}
 };
 
@@ -506,17 +516,13 @@ public:
 	 * @todo: double vs i64
 	 */
 	double getDoubleScore() const {
-		// Those values are arbitrary for now:
-		constexpr static double HERO_C_COEFF  = 16.0;
-		constexpr static double HERO_U_COEFF  = 1.0;
-		constexpr static double ENEMY_U_COEFF = -1.0;
-		constexpr static double ENEMY_C_COEFF = -8.0;
+		
 
 		return 
-			HERO_C_COEFF  * hero_conditional.doubleScore() +
-			HERO_U_COEFF  * hero_unconditional.doubleScore() +
-			ENEMY_U_COEFF * enemy_unconditional.doubleScore() +
-			ENEMY_C_COEFF * enemy_conditional.doubleScore();
+			conf::HERO_C_COEFF  * hero_conditional.doubleScore() +
+			conf::HERO_U_COEFF  * hero_unconditional.doubleScore() +
+			conf::ENEMY_U_COEFF * enemy_unconditional.doubleScore() +
+			conf::ENEMY_C_COEFF * enemy_conditional.doubleScore();
 	}
 
 	/**
@@ -828,8 +834,6 @@ struct GameState {
 		// no hero hit
 		// not enemy hit
 
-		constexpr static u64 MAX_ROUND_LOOKUP = 10;
-
 		SurvivalData hero_u;
 		SurvivalData hero_c;
 		SurvivalData enemy_u;
@@ -848,7 +852,7 @@ struct GameState {
 
 		// @TODO: make it less boilerplate'y
 
-		for (u64 i = 0; i < MAX_ROUND_LOOKUP; i++) {
+		for (u64 i = 0; i < conf::MAX_ROUND_LOOKUP; i++) {
 			// sim step:
 
 			// ghost shoots:
@@ -1039,7 +1043,7 @@ Move findBestHeroMove(GameState state) {
 	ABGameState ab_state = {std::move(state), std::nullopt};
 	return alpha_beta::alphaBeta<true, true>(
 		std::move(ab_state),
-		AB_DEPTH,
+		conf::AB_DEPTH,
 		PositionEvaluation::losing(),
 		PositionEvaluation::wining()
 	);
@@ -1205,13 +1209,13 @@ int main() {
 	auto game_state = readInput();
 
 	// standard:
-	// auto best_move = findBestHeroMove(std::move(game_state));
-	// std::cout << moveToIndex(best_move) << "\n";
+	auto best_move = findBestHeroMove(std::move(game_state));
+	std::cout << moveToIndex(best_move) << "\n";
 
-	// std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
+	std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
 	// exampleScenario(game_state);
-	ghostTest(game_state);
+	// ghostTest(game_state);
 	
 }
 
