@@ -172,6 +172,7 @@ constexpr u64 playerToIndex(Player player) {
 	return static_cast<std::underlying_type_t<Player>>(player);
 }
 
+// @TODO: refactor: IdxVec
 struct Vec {
 	i64 x = 0;
 	i64 y = 0;
@@ -192,6 +193,10 @@ struct Vec {
 	}
 };
 
+constexpr i64 posToIndex(Vec pos) {
+	// @TODO: this is duplicated
+	return pos.x * m + pos.y;
+}
 
 constexpr Vec dirToVec(Direction dir) {
 	// we have our dimension switched
@@ -469,6 +474,7 @@ public:
 		bullets.get(dir).atIndexMut(pos) = true;
 	}
 
+	[[gnu::cold]]
 	bool isBulletAt(Vec pos) const {
 		bool res = false;
 		for (auto dir: DIRECTION_ARRAY) {
@@ -517,6 +523,7 @@ public:
 						// @TODO: for now we don't check for out of bounds here.
 						// it should never happen for valid inputs.
 
+						// @opt: this if might be eliminatable
 						if (walls.atIndex(new_pos)) {
 							new_dir = flip(dir);
 							new_pos = pos;
@@ -979,17 +986,18 @@ struct GameState {
 	}
 
 	bool isTerminal() const {
-		return bullets.isBulletAt(players.getHeroPosition()) or bullets.isBulletAt(players.getEnemyPosition());
+		return bullets.isBulletAtIndex(posToIndex(players.getHeroPosition()))
+			or bullets.isBulletAtIndex(posToIndex(players.getEnemyPosition()));
 	}
 
 	PositionEvaluation evaluate() const {
-		bool hero_hit = bullets.isBulletAt(players.getHeroPosition());
-		bool enemy_hit = bullets.isBulletAt(players.getEnemyPosition());
+		bool hero_hit = bullets.isBulletAtIndex(posToIndex(players.getHeroPosition()));
+		bool enemy_hit = bullets.isBulletAtIndex(posToIndex(players.getEnemyPosition()));
 
 		if (hero_hit or enemy_hit) {
 			return {
-				bullets.isBulletAt(players.getHeroPosition()),
-				bullets.isBulletAt(players.getEnemyPosition())
+				hero_hit,
+				enemy_hit
 			};
 		}
 
@@ -1017,6 +1025,11 @@ struct GameState {
 		// @OPT making one struct here for quad opers
 		// could be way faster
 
+		u64 hc_count = 0;
+		u64 hu_count = 0;
+		u64 ec_count = 0;
+		u64 eu_count = 0;
+
 		for (u64 i = 0; i < conf::MAX_ROUND_LOOKUP; i++) {
 			// sim step:
 
@@ -1038,11 +1051,11 @@ struct GameState {
 			// elim ghosts with walls (done in moveGhostsEverywhere)
 
 			// elim ghost with bullets:
-			auto hc_count = hero_c_ghosts.eliminateGhostsAt(lookup_bullets);
-			auto ec_count = enemy_c_ghosts.eliminateGhostsAt(lookup_bullets);
+			hc_count = hero_c_ghosts.eliminateGhostsAt(lookup_bullets);
+			ec_count = enemy_c_ghosts.eliminateGhostsAt(lookup_bullets);
 			
-			auto hu_count = hero_u_ghosts.eliminateGhostsAt(enemy_c_bullets);
-			auto eu_count = enemy_u_ghosts.eliminateGhostsAt(hero_c_bullets);
+			hu_count = hero_u_ghosts.eliminateGhostsAt(enemy_c_bullets);
+			eu_count = enemy_u_ghosts.eliminateGhostsAt(hero_c_bullets);
 
 			if (hc_count > 0) {
 				hero_c.round_count = i + 1;
@@ -1058,10 +1071,10 @@ struct GameState {
 			}
 		}
 
-		hero_c.ghost_count  = hero_c_ghosts.ghostCount();
-		hero_u.ghost_count  = hero_u_ghosts.ghostCount();
-		enemy_c.ghost_count = enemy_c_ghosts.ghostCount();
-		enemy_u.ghost_count = enemy_u_ghosts.ghostCount();
+		hero_c.ghost_count  = hc_count;
+		hero_u.ghost_count  = hu_count;
+		enemy_c.ghost_count = ec_count;
+		enemy_u.ghost_count = eu_count;
 	
 		return {
 			hero_c,
