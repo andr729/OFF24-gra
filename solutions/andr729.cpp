@@ -20,17 +20,19 @@ using i64 = int64_t;
 using i32 = int32_t;
 
 namespace conf {
+	// note: we want to optimize it so we have 12/3 here
 	constexpr u64 MAX_ROUND_LOOKUP = 8;
-	constexpr u64 AB_DEPTH = 4;
+	constexpr u64 AB_DEPTH = 2;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;
 
+	// @TODO: optimize those parameters:
 	// Those values are arbitrary for now:
-	constexpr double HERO_C_COEFF  = 16.0;
+	constexpr double HERO_C_COEFF  = 8.0;
 	constexpr double HERO_U_COEFF  = 1.0;
-	constexpr double ENEMY_U_COEFF = -1.0;
-	constexpr double ENEMY_C_COEFF = -8.0;
+	constexpr double ENEMY_U_COEFF = -8.0;
+	constexpr double ENEMY_C_COEFF = -1.0;
 }
 
 
@@ -658,6 +660,22 @@ public:
 	bool operator>(const PositionEvaluation& other) const {
 		return other < *this;
 	}
+
+	[[gnu::cold]]
+	void debugPrint() const {
+		if (isWining()) {
+			std::cerr << "Eval: Wining\n";
+		}
+		else if (isLosing()) {
+			std::cerr << "Eval: Losing\n";
+		}
+		else if (isDraw()) {
+			std::cerr << "Eval: Draw\n";
+		}
+		else {
+			std::cerr << "Eval: " << getDoubleScore() << "\n";
+		}
+	}
 };
 
 struct PlayerPositions {
@@ -681,6 +699,7 @@ public:
 	Vec getEnemyPosition() const {
 		return player_positions[playerToIndex(Player::ENEMY)];
 	}
+
 };
 
 struct DebugPrintLayer {
@@ -1020,8 +1039,9 @@ namespace alpha_beta {
 
 	template<>
 	struct ABRetType<true> {
-		using type = Move;
+		using type = std::pair<Move, PositionEvaluation>;
 	};
+
 
 	constinit static u64 leaf_counter = 0;
 
@@ -1084,7 +1104,7 @@ namespace alpha_beta {
 			}
 
 			if constexpr (INITIAL) {
-				return best_move;
+				return { best_move, value };
 			}
 			else {
 				return value;
@@ -1134,12 +1154,17 @@ namespace alpha_beta {
 
 Move findBestHeroMove(GameState state) {
 	ABGameState ab_state = {std::move(state), std::nullopt};
-	return alpha_beta::alphaBeta<true, true>(
+	auto res = alpha_beta::alphaBeta<true, true>(
 		std::move(ab_state),
 		conf::AB_DEPTH,
 		PositionEvaluation::losing(),
 		PositionEvaluation::wining()
 	);
+
+	res.second.debugPrint();
+	std::cerr << "\n";
+
+	return res.first;
 }
 
 /** 
@@ -1311,7 +1336,7 @@ int main() {
 	auto best_move = findBestHeroMove(std::move(game_state));
 	std::cout << moveToIndex(best_move) << "\n";
 
-	// std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
+	std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
 	// exampleScenario(game_state);
 	// ghostTest(game_state);
