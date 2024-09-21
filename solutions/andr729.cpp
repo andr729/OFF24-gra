@@ -830,20 +830,19 @@ public:
 
 	/**
 	 * @param bullets 
-	 * @return u64 number of ghosts after elimination (@TODO)
+	 * @return u64 number of ghosts after elimination
 	 */
-	void eliminateGhostsAt(const BulletLayer& bullets) {
+	u64 eliminateGhostsAt(const BulletLayer& bullets) {
 		// @note: isBulletAt is way faster then eliminateGhostsAt x4
-		// u64 count = 0;
+		u64 count = 0;
 		for (i64 i = 0; i < i64(n*m); i++) {
 			// for (i64 j = 0; j < i64(m); j++) {
 				// Vec pos = {i, j};
 				ghosts.atIndexMut(i) &= (!bullets.isBulletAtIndex(i));
-
-				// count += ghosts.atIndex(i);
+				count += ghosts.atIndex(i);
 			// }
 		}
-		// return count;
+		return count;
 	}
 
 	void moveGhostsEverywhere(const BoolLayer& walls) {
@@ -1039,22 +1038,22 @@ struct GameState {
 			// elim ghosts with walls (done in moveGhostsEverywhere)
 
 			// elim ghost with bullets:
-			hero_c_ghosts.eliminateGhostsAt(lookup_bullets);
-			enemy_c_ghosts.eliminateGhostsAt(lookup_bullets);
+			auto hc_count = hero_c_ghosts.eliminateGhostsAt(lookup_bullets);
+			auto ec_count = enemy_c_ghosts.eliminateGhostsAt(lookup_bullets);
 			
-			hero_u_ghosts.eliminateGhostsAt(enemy_c_bullets);
-			enemy_u_ghosts.eliminateGhostsAt(hero_c_bullets);
+			auto hu_count = hero_u_ghosts.eliminateGhostsAt(enemy_c_bullets);
+			auto eu_count = enemy_u_ghosts.eliminateGhostsAt(hero_c_bullets);
 
-			if (hero_c_ghosts.ghostCount() > 0) {
+			if (hc_count > 0) {
 				hero_c.round_count = i + 1;
 			}
-			if (hero_u_ghosts.ghostCount() > 0) {
+			if (hu_count > 0) {
 				hero_u.round_count = i + 1;
 			}
-			if (enemy_c_ghosts.ghostCount() > 0) {
+			if (ec_count > 0) {
 				enemy_c.round_count = i + 1;
 			}
-			if (enemy_u_ghosts.ghostCount() > 0) {
+			if (eu_count > 0) {
 				enemy_u.round_count = i + 1;
 			}
 		}
