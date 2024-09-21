@@ -259,10 +259,12 @@ private:
 	std::vector<Bool> bullets;
 
 	bool& getRef(u64 x, u64 y) {
+		// @opt: test []
 		return this->bullets.at(x * m + y).b;
 	}
 	
 	bool getRef(u64 x, u64 y) const {
+		// @opt: test []
 		return this->bullets.at(x * m + y).b;
 	}
 
@@ -531,6 +533,10 @@ public:
 		ghosts.set(initial_pos, true);
 	}
 
+	const BoolLayer& getGhosts() const {
+		return ghosts;
+	}
+
 	u64 ghostCount() const {
 		u64 count = 0;
 		for (i64 i = 0; i < i64(n); i++) {
@@ -563,17 +569,24 @@ public:
 
 	void moveGhostsEverywhere() {
 		// @todo: no bound checks here -- should not be needed
+		// @opt: try to avoid copy
+		// (can be done, but the question is will it be more efficient).
+
+		BoolLayer new_ghosts = ghosts;
+
 		for (i64 i = 0; i < i64(n); i++) {
 			for (i64 j = 0; j < i64(m); j++) {
 				Vec pos = {i, j};
 				if (ghosts.get(pos)) {
 					for (auto dir: DIRECTION_ARRAY) {
 						Vec new_pos = pos + dirToVec(dir);
-						ghosts.set(new_pos, true);
+						new_ghosts.set(new_pos, true);
 					}
 				}
 			}
 		}
+
+		ghosts = std::move(new_ghosts);
 	}
 };
 
@@ -906,6 +919,7 @@ GameState readInput() {
 	return game_state;
 }
 
+[[maybe_unused]]
 [[gnu::cold]]
 void exampleScenario(GameState game_state) {
 	using enum Move;
@@ -940,6 +954,36 @@ void exampleScenario(GameState game_state) {
 	game_state.debugPrint();
 }
 
+[[maybe_unused]]
+[[gnu::cold]]
+void ghostTest(GameState game_state) {
+	auto walls = game_state.walls;
+	auto bullets = game_state.bullets;
+
+	auto ghosts = GhostPlayerLayer(game_state.players.getHeroPosition());
+
+	for (u64 i = 0; i < 10; i++) {
+		// print:
+		DebugPrintLayer printer;
+		printer.apply(ghosts.getGhosts(), 'G');
+		printer.apply(bullets);
+		printer.apply(walls, '#');
+		printer.print();
+		std::cout << "\n";
+		std::cout << std::flush;
+
+		// move:
+		ghosts.moveGhostsEverywhere();
+		bullets.moveBulletsWithWalls(walls);
+
+		// eliminations:
+		ghosts.eliminateGhostsAt(bullets);
+		ghosts.eliminateGhostsAt(walls);
+		
+		
+	}
+}
+
 }
 
 int main() {
@@ -954,8 +998,8 @@ int main() {
 
 	// std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
-	exampleScenario(game_state);
-
+	// exampleScenario(game_state);
+	ghostTest(game_state);
 	
 }
 
