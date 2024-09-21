@@ -14,7 +14,7 @@ using i64 = int64_t;
 
 namespace conf {
 	constexpr u64 MAX_ROUND_LOOKUP = 8;
-	constexpr u64 AB_DEPTH = 3;
+	constexpr u64 AB_DEPTH = 2;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;

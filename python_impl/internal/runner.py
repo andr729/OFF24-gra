@@ -67,7 +67,8 @@ class Game:
 		else:
 			try:
 				# @TODO: this fails when exec_str in not given explicitly as relative path
-				out = subprocess.check_output(exec_str, input = self.showForUser(who), text=True, timeout = 0.5)
+				# @TODO: get timeout from config
+				out = subprocess.check_output(exec_str, input = self.showForUser(who), text=True, timeout = 1.0)
 				return self.parseOutput(out)
 			except subprocess.TimeoutExpired:
 				print("Warning: Exec hit timeout")
