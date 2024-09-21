@@ -21,18 +21,18 @@ using i32 = int32_t;
 
 namespace conf {
 	// note: we want to optimize it so we have 12/3 here
-	constexpr u64 MAX_ROUND_LOOKUP = 8;
-	constexpr u64 AB_DEPTH = 4;
+	constexpr u64 MAX_ROUND_LOOKUP = 20;
+	constexpr u64 AB_DEPTH = 2;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;
 
 	// @TODO: optimize those parameters:
 	// Those values are arbitrary for now:
-	constexpr double HERO_C_COEFF  = 8.0;
-	constexpr double HERO_U_COEFF  = 1.0;
-	constexpr double ENEMY_U_COEFF = -8.0;
-	constexpr double ENEMY_C_COEFF = -1.0;
+	constexpr double HERO_C_COEFF  = 0.0;
+	constexpr double HERO_U_COEFF  = 10.0;
+	constexpr double ENEMY_U_COEFF = -20.0;
+	constexpr double ENEMY_C_COEFF = -0.0;
 }
 
 
@@ -1234,8 +1234,8 @@ Move findBestHeroMove(GameState state) {
 		PositionEvaluation::wining()
 	);
 
-	res.second.debugPrint();
-	std::cerr << "\n";
+	// res.second.debugPrint();
+	// std::cerr << "\n";
 
 	return res.first;
 }
@@ -1410,7 +1410,7 @@ int main() {
 	auto best_move = findBestHeroMove(std::move(game_state));
 	std::cout << moveToIndex(best_move) << "\n";
 
-	std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
+	// std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
 	// exampleScenario(game_state);
 	// ghostTest(game_state);
@@ -1418,3 +1418,15 @@ int main() {
 }
 
 
+
+
+
+
+
+/*
+notes:
+	3_4 wins with 2_10
+	2_10 seams better then 2_32
+
+
+*/
