@@ -802,8 +802,6 @@ struct GameState {
 	}
 
 	PositionEvaluation evaluate() const {
-		// @TODO...
-		// this will be a bigger part of the code
 		bool hero_hit = bullets.isBulletAt(players.getHeroPosition());
 		bool enemy_hit = bullets.isBulletAt(players.getEnemyPosition());
 
@@ -814,8 +812,87 @@ struct GameState {
 			};
 		}
 
-		// @TODO
-		assert (false);
+		// no hero hit
+		// not enemy hit
+
+		constexpr static u64 MAX_ROUND_LOOKUP = 10;
+
+		SurvivalData hero_u;
+		SurvivalData hero_c;
+		SurvivalData enemy_u;
+		SurvivalData enemy_c;
+
+		auto lookup_bullets = this->bullets;
+
+		GhostPlayerLayer hero_c_ghosts(players.getHeroPosition());
+		GhostPlayerLayer hero_u_ghosts(players.getHeroPosition());
+
+		GhostPlayerLayer enemy_c_ghosts(players.getEnemyPosition());
+		GhostPlayerLayer enemy_u_ghosts(players.getEnemyPosition());
+
+		BulletLayer hero_c_bullets;
+		BulletLayer enemy_c_bullets;
+
+		// @TODO: make it less boilerplate'y
+
+		for (u64 i = 0; i < MAX_ROUND_LOOKUP; i++) {
+			// sim step:
+
+			// TODO: ghost shoot:
+			// Hero c adds to hero_c_bullets
+			// Enemy c add to enemy_c_bullets
+			
+			// move ghosts:
+			hero_c_ghosts.moveGhostsEverywhere();
+			hero_u_ghosts.moveGhostsEverywhere();
+			enemy_c_ghosts.moveGhostsEverywhere();
+			enemy_u_ghosts.moveGhostsEverywhere();
+
+			// move bullets:
+			lookup_bullets.moveBulletsWithWalls(walls);
+			hero_c_bullets.moveBulletsWithWalls(walls);
+			enemy_c_bullets.moveBulletsWithWalls(walls);
+
+			// elim ghosts with walls:
+			hero_c_ghosts.eliminateGhostsAt(walls);
+			hero_u_ghosts.eliminateGhostsAt(walls);
+			enemy_c_ghosts.eliminateGhostsAt(walls);
+			enemy_u_ghosts.eliminateGhostsAt(walls);
+
+			// elim ghost with bullets:
+			hero_c_ghosts.eliminateGhostsAt(lookup_bullets);
+			hero_u_ghosts.eliminateGhostsAt(lookup_bullets);
+			enemy_c_ghosts.eliminateGhostsAt(lookup_bullets);
+			enemy_u_ghosts.eliminateGhostsAt(lookup_bullets);
+
+			hero_u_ghosts.eliminateGhostsAt(enemy_c_bullets);
+			enemy_u_ghosts.eliminateGhostsAt(hero_c_bullets);
+
+			if (hero_c_ghosts.ghostCount() > 0) {
+				hero_c.round_count = i + 1;
+			}
+			if (hero_u_ghosts.ghostCount() > 0) {
+				hero_u.round_count = i + 1;
+			}
+			if (enemy_c_ghosts.ghostCount() > 0) {
+				enemy_c.round_count = i + 1;
+			}
+			if (enemy_u_ghosts.ghostCount() > 0) {
+				enemy_u.round_count = i + 1;
+			}
+		}
+
+		hero_c.ghost_count  = hero_c_ghosts.ghostCount();
+		hero_u.ghost_count  = hero_u_ghosts.ghostCount();
+		enemy_c.ghost_count = enemy_c_ghosts.ghostCount();
+		enemy_u.ghost_count = enemy_u_ghosts.ghostCount();
+	
+		return {
+			hero_c,
+			hero_u,
+			enemy_c,
+			enemy_u
+		};
 	}
 };
 
