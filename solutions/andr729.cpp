@@ -962,7 +962,7 @@ void ghostTest(GameState game_state) {
 
 	auto ghosts = GhostPlayerLayer(game_state.players.getHeroPosition());
 
-	for (u64 i = 0; i < 10; i++) {
+	for (u64 i = 0; i < 20; i++) {
 		// print:
 		DebugPrintLayer printer;
 		printer.apply(ghosts.getGhosts(), 'G');
