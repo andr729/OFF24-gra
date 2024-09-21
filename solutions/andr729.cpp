@@ -9,6 +9,7 @@ namespace {
 
 #define CONST_NM 1
 #define NO_VECTOR_IF_POSSIBLE 0
+#define LEAK_NO_VEC_MEM 0
 #define NO_BOUND_CHECKS 1
 
 // @opt: debug/release mode (with macros, so we don't waste opt passes)
@@ -323,7 +324,11 @@ private:
 			}
 
 			~BoolArrPtr() {
-				delete ptr;
+				#if LEAK_NO_VEC_MEM == 1
+					// do nothing
+				#else
+					delete ptr;
+				#endif
 			}
 		};
 
@@ -757,8 +762,9 @@ public:
 
 	void moveGhostsEverywhere() {
 		// @todo: no bound checks here -- should not be needed
-		// @opt: try to avoid copy
-		// (can be done, but the question is will it be more efficient).
+
+		// Try to avoid copy -- apparently its very similar the way it is
+		// It may be that compiler optimizes it much better
 
 		BoolLayer new_ghosts = ghosts;
 
