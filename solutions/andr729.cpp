@@ -3,17 +3,18 @@
 #include <vector>
 #include <array>
 #include <optional>
-// #include <memory>
+#include <bitset>
 
 namespace {
 
 #define CONST_NM 1
-#define NO_VECTOR_IF_POSSIBLE 0
-#define LEAK_NO_VEC_MEM 0
+#define BIT_SET 1
+#define MOVE_BULLETS_VECTOR 1
 #define NO_BOUND_CHECKS 1
 #define NO_OTHER_CHECKS 1
-
-// @opt: debug/release mode (with macros, so we don't waste opt passes)
+#define UNSAFE_OTHERS 1
+#define ALLOW_BIGGER_NM 1
+#define STATIC_WALLS 1
 
 using u64 = uint64_t;
 using i64 = int64_t;
@@ -22,22 +23,20 @@ using i32 = int32_t;
 namespace conf {
 	// note: we want to optimize it so we have 12/3 here
 	constexpr u64 MAX_ROUND_LOOKUP = 8;
-	constexpr u64 AB_DEPTH = 2;
+	constexpr u64 AB_DEPTH = 3;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;
+
+	constexpr double TIE_COEFF = 0;
 
 	// @TODO: optimize those parameters:
 	// Those values are arbitrary for now:
 	constexpr double HERO_C_COEFF  = 8.0;
 	constexpr double HERO_U_COEFF  = 1.0;
-	constexpr double ENEMY_U_COEFF = -8.0;
-	constexpr double ENEMY_C_COEFF = -1.0;
+	constexpr double ENEMY_U_COEFF = -1.0;
+	constexpr double ENEMY_C_COEFF = -8.0;
 }
-
-
-// constexpr u64 N = 15;
-// constexpr u64 M = 20;
 
 /*******************/
 // Global parameters:
@@ -45,9 +44,11 @@ namespace conf {
 #if CONST_NM == 1
 	constexpr u64 n = 15;
 	constexpr u64 m = 20;
+	constexpr u64 nm = n * m;
 #else
 	static u64 n;
 	static u64 m;
+	static u64 nm;
 #endif
 
 constexpr u64 MAX_ROUND = 400;
@@ -80,6 +81,20 @@ enum class Direction {
 	RIGHT = 3,
 };
 
+constexpr i64 moveIndexPos(i64 index, Direction dir) {
+	switch (dir) {
+		case Direction::UP:
+			return index - m;
+		case Direction::DOWN:
+			return index + m;
+		case Direction::LEFT:
+			return index - 1;
+		case Direction::RIGHT:
+			return index + 1;
+	}
+	assert(false);
+}
+
 [[gnu::cold]]
 constexpr char dirToChar(Direction dir) {
 	switch (dir) {
@@ -104,6 +119,11 @@ constexpr std::array<Direction, 4> DIRECTION_ARRAY = {
 };
 
 constexpr Direction moveToDir(Move move) {
+	#if UNSAFE_OTHERS == 1
+		return static_cast<Direction>(
+			static_cast<std::underlying_type_t<Move>>(move) % 4
+		);
+	#else
 	switch (move) {
 		case Move::GO_UP:
 			return Direction::UP;
@@ -124,9 +144,11 @@ constexpr Direction moveToDir(Move move) {
 		default:
 			assert(false);
 	}
+	#endif
 }
 
 // @OPT: change the order maybe?
+// @note: can't just do it now
 constexpr std::array<Move, 9> MOVE_ARRAY = {
 	Move::GO_UP,
 	Move::GO_DOWN,
@@ -152,9 +174,17 @@ constexpr u64 playerToIndex(Player player) {
 	return static_cast<std::underlying_type_t<Player>>(player);
 }
 
+// @TODO: refactor: IdxVec
 struct Vec {
 	i64 x = 0;
 	i64 y = 0;
+
+	constexpr Vec() = default;
+	constexpr Vec(i64 x, i64 y): x(x), y(y) {}
+	// constexpr Vec(const Vec& other) = default;
+	// // constexpr Vec(Vec&& other) = default;
+
+	// constexpr Vec& operator=(const Vec& other) = default;
 	
 	constexpr bool operator==(const Vec& other) const = default;
 
@@ -169,11 +199,17 @@ struct Vec {
 	}
 };
 
+constexpr i64 posToIndex(Vec pos) {
+	return pos.x * m + pos.y;
+}
+
 constexpr Vec dirToVec(Direction dir) {
 	// we have our dimension switched
 	// so x is i, y is j
 	// for this reason here
 	// Also x is inverted so we can print it from 0 to n-1 (not reversed)
+
+	// @note: using array is here not faster
 	switch (dir) {
 		case Direction::UP:
 			return {-1, 0};
@@ -195,6 +231,12 @@ constexpr std::array<Vec, 4> DIR_VEC_ARRAY = {
 };
 
 constexpr Direction flip(Direction dir) {
+	#if UNSAFE_OTHERS == 1
+		// 0->1, 1->0, 2->3, 3->2
+		auto dir_int = static_cast<std::underlying_type_t<Direction>>(dir);
+		dir_int ^= 0b1;
+		return static_cast<Direction>(dir_int);
+	#else
 	switch (dir) {
 		case Direction::UP:
 			return Direction::DOWN;
@@ -206,6 +248,7 @@ constexpr Direction flip(Direction dir) {
 			return Direction::LEFT;
 	}
 	assert(false);
+	#endif
 }
 
 template <typename T>
@@ -282,7 +325,7 @@ struct QuadDirStorage {
 	}
 };
 
-
+[[gnu::cold]]
 void skipNewLine() {
 	char c;
 	std::cin >> std::noskipws >> c;
@@ -296,84 +339,59 @@ struct Bool {
 
 struct BoolLayer {
 private:
-	#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
-		struct BoolArr {
-			// @TODO: does it work?
-			bool arr[n * m] = { false };
-		};
-		struct BoolArrPtr {
-			BoolArr* ptr;
-
-			BoolArrPtr(): ptr(new BoolArr()) {}
-			BoolArrPtr(const BoolArrPtr& other) {
-				ptr = new BoolArr(*other.ptr);
-			}
-			BoolArrPtr(BoolArrPtr&& other) {
-				ptr = other.ptr;
-				other.ptr = nullptr;
-			};
-			BoolArrPtr& operator=(const BoolArrPtr& other) {
-				// @opt: memcpy
-				for (u64 i = 0; i < n * m; i++) {
-					ptr->arr[i] = other.ptr->arr[i];
-				}
-				return *this;
-			};
-			BoolArrPtr& operator=(BoolArrPtr&& other) {
-				// @opt: memcpy
-				for (u64 i = 0; i < n * m; i++) {
-					ptr->arr[i] = other.ptr->arr[i];
-				}
-				return *this;
-			}
-
-			~BoolArrPtr() {
-				#if LEAK_NO_VEC_MEM == 1
-					// do nothing
-				#else
-					delete ptr;
-				#endif
-			}
-		};
-
-		BoolArrPtr bullets;
-		// @note: having in on stack might be bad
+	#if BIT_SET == 1
+		using DataT = std::bitset<nm>;
+		std::bitset<nm> bullets;
 	#else
-		std::vector<Bool> bullets;
+		using DataT = std::vector<Bool>;
+		std::vector<Bool> bullets{nm, {false}};
 	#endif
 
-	bool& getRef(u64 x, u64 y) {
-		#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
-			// @note: no bound check here..
-			return this->bullets.ptr->arr[x * m + y];
-		#else
-			#if NO_BOUND_CHECKS == 1
-				return this->bullets[x * m + y].b;
-			#else 
-				return this->bullets.at(x * m + y).b;
-			#endif
-		#endif
-	}
-	
-	bool getRef(u64 x, u64 y) const {
-		#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
-			// @note: no bound check here..
-			return this->bullets.ptr->arr[x * m + y];
-		#else
-			#if NO_BOUND_CHECKS == 1
-				return this->bullets[x * m + y].b;
-			#else 
-				return this->bullets.at(x * m + y).b;
-			#endif
-		#endif
-	}
+	BoolLayer(DataT bullets): bullets(bullets) {}
 
 public:
-	#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
-		BoolLayer() = default;
+	#if BIT_SET == 1
+		bool atIndex(u64 index) const {
+			#if NO_BOUND_CHECKS == 1
+				return this->bullets[index];
+			#else 
+				return this->bullets.test(index);
+			#endif
+		}
+		auto atIndexMut(u64 index) {
+			#if NO_BOUND_CHECKS == 1
+				return this->bullets[index];
+			#else 
+				return this->bullets[index];
+			#endif
+		}
+
+		const auto& getBitset() const {
+			return this->bullets;
+		}
+		auto& getBitsetMut() {
+			return this->bullets;
+		}
 	#else
-		BoolLayer(): bullets(n * m, {false}) {}
+		bool atIndex(u64 index) const {
+			#if NO_BOUND_CHECKS == 1
+				return this->bullets[index].b;
+			#else 
+				return this->bullets.at(index).b;
+			#endif
+		}
+
+		bool& atIndexMut(u64 index) {
+			#if NO_BOUND_CHECKS == 1
+				return this->bullets[index].b;
+			#else 
+				return this->bullets.at(index).b;
+			#endif
+		}
 	#endif
+
+	BoolLayer() = default;
+
 
 	BoolLayer(const BoolLayer& other) = default;
 	BoolLayer(BoolLayer&& other)      = default;
@@ -382,15 +400,16 @@ public:
 	BoolLayer& operator=(BoolLayer&& other)      = default;
 
 	bool get(Vec pos) const {
-		return getRef(pos.x, pos.y);
-	}
-
-	bool& getBoolRef(Vec pos) {
-		return getRef(pos.x, pos.y);
+		return atIndex(posToIndex(pos));
 	}
 
 	void set(Vec pos, bool val) {
-		getRef(pos.x, pos.y) = val;
+		atIndexMut(posToIndex(pos)) = val;
+	}
+
+	void andAt(Vec pos, bool v) {
+		bool curr = atIndex(posToIndex(pos));
+		atIndexMut(posToIndex(pos)) = curr and v;
 	}
 
 	static BoolLayer fromVec(const std::vector<Vec>& vecs) {
@@ -399,6 +418,18 @@ public:
 			res.set(vec, true);
 		}
 		return res;
+	}
+
+	BoolLayer negated() const {
+		#if BIT_SET == 1
+			return BoolLayer(~this->getBitset());
+		#else
+			BoolLayer res;
+			for (i64 i = 0; i < i64(nm); i++) {
+				res.atIndexMut(i) = not this->atIndex(i);
+			}
+			return res;
+		#endif
 	}
 };
 
@@ -415,20 +446,31 @@ public:
 	BulletLayer(const BulletLayer& other) = default;
 	BulletLayer(BulletLayer&& other)      = default;
 	
+	BulletLayer& operator=(const BulletLayer& other) = default;
 	BulletLayer& operator=(BulletLayer&& other) = default;
 
 	const BoolLayer& getBullets(Direction dir) const {
 		return bullets.get(dir);
 	}
 
-	void addBullet(Vec pos, Direction dir) {
-		bullets.get(dir).set(pos, true);
+	BoolLayer& getBulletsMut(Direction dir) {
+		return bullets.get(dir);
 	}
 
-	bool isBulletAt(Vec pos) const {
+	void addBulletAtIndex(i64 pos, Direction dir) {
+		bullets.get(dir).atIndexMut(pos) = true;
+	}
+
+	#if BIT_SET == 0
+		void addBulletAtIndexIf(i64 pos, Direction dir, bool if_) {
+			bullets.get(dir).atIndexMut(pos) |= if_;
+		}
+	#endif
+
+	bool isBulletAtIndex(i64 pos) const {
 		bool res = false;
 		for (auto dir: DIRECTION_ARRAY) {
-			res |= bullets.get(dir).get(pos);
+			res |= bullets.get(dir).atIndex(pos);
 		}
 		return res;
 	}
@@ -446,37 +488,64 @@ public:
 		assert(false);
 	}
 
-	void moveBulletsWithWalls(const BoolLayer& walls ) {
-		// ideally we want to do it inplace for performance..
-		// for now we ignore it
-		BulletLayer new_bullets;
-
-		for (u64 i = 0; i < n; i++) {
-			for (u64 j = 0; j < m; j++) {
-				for (auto dir: DIRECTION_ARRAY) {
-					Vec pos = {i64(i), i64(j)};
-					if (bullets.get(dir).get(pos)) {
-						Vec new_pos = pos + dirToVec(dir);
-
-						Direction new_dir = dir;
-
-						// @TODO: for now we don't check for out of bounds here.
-						// it should never happen for valid inputs.
-
-						if (walls.get(new_pos)) {
-							new_dir = flip(dir);
-							new_pos = pos;
-						}
-
-						new_bullets.addBullet(new_pos, new_dir);
+	void moveBulletsWithWalls(const BoolLayer& walls) {
+		#if (BIT_SET == 1) and (MOVE_BULLETS_VECTOR == 1)
+			// @TODO: -m/+m/-1/+1 are duplicated here:
+			constexpr static std::array<std::pair<Direction, i64>, 4> DIR_SHIFT_ARR = {
+				std::pair{Direction::UP, -i64(m)},
+				{Direction::DOWN, m},
+				{Direction::LEFT, -1},
+				{Direction::RIGHT, 1}	
+			};
+			
+			// @note: shifts here are reversed
+			this->getBulletsMut(Direction::UP).getBitsetMut() >>= m;
+			this->getBulletsMut(Direction::DOWN).getBitsetMut() <<= m;
+			this->getBulletsMut(Direction::LEFT).getBitsetMut() >>= 1;
+			this->getBulletsMut(Direction::RIGHT).getBitsetMut() <<= 1;
+			
+			// flip them:	
+			for (i64 i = 0; i < i64(nm); i++) {
+				for (auto [dir, shift]: DIR_SHIFT_ARR) {
+					// here we don't care about double flips, cause
+					// flipped bullets will only be, where there are no walls!
+					
+					if (walls.atIndex(i) and bullets.get(dir).atIndex(i)) [[unlikely]] {
+						bullets.get(dir).atIndexMut(i) = false;
+						bullets.get(flip(dir)).atIndexMut(i - shift) = true;
 					}
 				}
 			}
-		}
 
+			// no assign, we do it inp place
 
-		// @TODO: make sure it actually moves:
-		*this = std::move(new_bullets);
+		#else
+			// ideally we want to do it inplace for performance..
+			// for now we ignore it
+			BulletLayer new_bullets;
+
+			for (u64 i = 0; i < nm; i++) {
+				for (auto dir: DIRECTION_ARRAY) {
+					if (bullets.get(dir).atIndex(i)) {
+						i64 new_pos = moveIndexPos(i, dir);
+						Direction new_dir = dir;
+
+						// @note: for now we don't check for out of bounds here.
+						// it should never happen for valid inputs.
+
+						// @opt: this if might be eliminatable
+						if (walls.atIndex(new_pos)) [[unlikely]] {
+							new_dir = flip(dir);
+							new_pos = i;
+						}
+
+						new_bullets.addBulletAtIndex(new_pos, new_dir);
+					}
+				}
+			}
+
+			*this = std::move(new_bullets);
+		#endif
 	}
 };
 
@@ -609,7 +678,11 @@ public:
 	 * @todo: double vs i64
 	 */
 	double getDoubleScore() const {
-		
+		if (isDraw()) {
+			return
+				(conf::HERO_C_COEFF + conf::HERO_U_COEFF +
+				 conf::ENEMY_C_COEFF + conf::ENEMY_U_COEFF) * conf::TIE_COEFF; 
+		}
 
 		return 
 			conf::HERO_C_COEFF  * hero_conditional.doubleScore() +
@@ -682,6 +755,7 @@ struct PlayerPositions {
 private:
 	Vec player_positions[2];
 public:
+	PlayerPositions() = default;
 	PlayerPositions(Vec hero, Vec enemy): player_positions{hero, enemy} {}
 
 	Vec getPosition(Player player) const {
@@ -747,7 +821,6 @@ public:
 
 struct GhostPlayerLayer {
 private:
-	// @opt: hmm.. bitsets?
 	BoolLayer ghosts;
 public:
 	GhostPlayerLayer(Vec initial_pos): ghosts() {
@@ -758,78 +831,109 @@ public:
 		return ghosts;
 	}
 
-	u64 ghostCount() const {
-		u64 count = 0;
-		for (i64 i = 0; i < i64(n); i++) {
-			for (i64 j = 0; j < i64(m); j++) {
-				count += ghosts.get({i, j});
-			}
-		}
-		return count;
-	}
-
 	void eliminateGhostsAt(const BoolLayer& eliminations) {
-		for (i64 i = 0; i < i64(n); i++) {
-			for (i64 j = 0; j < i64(m); j++) {
-				Vec pos = {i, j};
-				ghosts.getBoolRef(pos) &= (!eliminations.get(pos));
+		#if BIT_SET == 1
+			ghosts.getBitsetMut() &= (~eliminations.getBitset());
+		#else
+			for (i64 i = 0; i < i64(nm); i++) {
+				ghosts.atIndexMut(i) &= (!eliminations.atIndex(i));
 			}
-		}
+		#endif
 	}
 
-	void eliminateGhostsAt(const BulletLayer& bullets) {
-		// @note: isBulletAt is way faster then eliminateGhostsAt x4
-		for (i64 i = 0; i < i64(n); i++) {
-			for (i64 j = 0; j < i64(m); j++) {
-				Vec pos = {i, j};
-				if (bullets.isBulletAt(pos)) {
-					ghosts.set(pos, false);
-				}
+	/**
+	 * @param bullets 
+	 * @return u64 number of ghosts after elimination
+	 */
+	u64 eliminateGhostsAt(const BulletLayer& bullets) {
+		#if BIT_SET == 1
+			auto eliminations =
+				bullets.getBullets(Direction::UP).getBitset() |
+				bullets.getBullets(Direction::DOWN).getBitset() |
+				bullets.getBullets(Direction::LEFT).getBitset() |
+				bullets.getBullets(Direction::RIGHT).getBitset();
+			
+			ghosts.getBitsetMut() &= (~eliminations);
+
+			return ghosts.getBitset().count();
+		#else 
+			// @note: isBulletAt is way faster then eliminateGhostsAt x4
+			u64 count = 0;
+			for (i64 i = 0; i < i64(nm); i++) {
+				ghosts.atIndexMut(i) &= (!bullets.isBulletAtIndex(i));
+				count += ghosts.atIndex(i);
 			}
-		}
+			return count;
+		#endif
 	}
 
-	void moveGhostsEverywhere() {
+	void moveGhostsEverywhere(const BoolLayer& negative_walls) {
 		// @todo: no bound checks here -- should not be needed
 
 		// Try to avoid copy -- apparently its very similar the way it is
 		// It may be that compiler optimizes it much better
 
-		BoolLayer new_ghosts = ghosts;
+		#if BIT_SET == 1
+			// @note: shift by 1 only works
+			// because we have walls on borders
 
-		for (i64 i = 0; i < i64(n); i++) {
-			for (i64 j = 0; j < i64(m); j++) {
-				Vec pos = {i, j};
-				if (ghosts.get(pos)) {
-					for (auto dir_vec: DIR_VEC_ARRAY) {
-						Vec new_pos = pos + dir_vec;
-						new_ghosts.set(new_pos, true);
+			std::bitset<nm> new_ghosts = ghosts.getBitset();
+			new_ghosts |= ghosts.getBitset() << m;
+			new_ghosts |= ghosts.getBitset() >> m;
+			new_ghosts |= ghosts.getBitset() << 1;
+			new_ghosts |= ghosts.getBitset() >> 1;
+
+			new_ghosts &= negative_walls.getBitset();
+
+			this->ghosts.getBitsetMut() = std::move(new_ghosts);
+		#else
+			BoolLayer new_ghosts = ghosts;
+
+			for (i64 i = 0; i < i64(nm); i++) {
+				if (ghosts.atIndex(i)) {
+					for (auto dir: DIRECTION_ARRAY) {
+						auto new_pos = moveIndexPos(i, dir);
+						new_ghosts.atIndexMut(new_pos) |= 
+							negative_walls.atIndex(new_pos);
 					}
 				}
 			}
-		}
 
-		ghosts = std::move(new_ghosts);
+			// this is not faster :o:
+			// for (i64 i = 0; i < i64(nm); i++) {
+			// 	new_ghosts.atIndexMut(i) &= 
+			// 		(not walls.atIndex(i));
+			// }
+
+			this->ghosts = std::move(new_ghosts);
+		#endif
 	}
 
 	void shootOnLayer(BulletLayer& bullets) const {
-		for (i64 i = 0; i < i64(n); i++) {
-			for (i64 j = 0; j < i64(m); j++) {
-				Vec pos = {i, j};
-				if (ghosts.get(pos)) {
-					for (auto dir: DIRECTION_ARRAY) {
-						bullets.addBullet(pos, dir);
-					}
+		#if BIT_SET == 1
+			bullets.getBulletsMut(Direction::UP).getBitsetMut() |= ghosts.getBitset();
+			bullets.getBulletsMut(Direction::DOWN).getBitsetMut() |= ghosts.getBitset();
+			bullets.getBulletsMut(Direction::LEFT).getBitsetMut() |= ghosts.getBitset();
+			bullets.getBulletsMut(Direction::RIGHT).getBitsetMut() |= ghosts.getBitset();
+		#else
+			for (i64 i = 0; i < i64(nm); i++) {
+				bool shoot = ghosts.atIndex(i);
+				for (auto dir: DIRECTION_ARRAY) {
+					bullets.addBulletAtIndexIf(i, dir, shoot);
 				}
 			}
-		}
+		#endif
 	}
 };
 
 struct GameState {
-	BoolLayer walls;
-	BulletLayer bullets;
+	#if STATIC_WALLS == 1
+		static inline BoolLayer walls;
+	#else
+		BoolLayer walls;
+	#endif
 
+	BulletLayer bullets;
 	PlayerPositions players;
 	
 	void moveBullets() {
@@ -846,8 +950,23 @@ struct GameState {
 		std::cout << "\n";
 	}
 
+	// struct BulletDiff {
+	// 	i64 index;
+	// 	bool value;
+	// };
+	// struct GoBackData {
+	// 	PlayerPositions old_players;
+	// 	BulletDiff bullet_diff[2];
+	// };
+
 	void applyMove(Move hero_move, Move enemy_move) {
 		// 1. first perform players actions:
+
+		// GoBackData go_back = {
+		// 	players,
+		// 	// @todo: we know, there are no bullets here, since there are walls:
+		// 	{{0, false}, {1, false}}
+		// };
 
 		PlayerPositions old_positions = players;
 
@@ -855,41 +974,52 @@ struct GameState {
 			{std::pair{Player::HERO, hero_move},
 			{Player::ENEMY, enemy_move}}) {
 			
-			// @TODO: for now we don't bound check here
+			// @note: for now we don't bound check here
 			// @TODO: for now we allow "walk into walk"
 			// sensible move check should disallow it
+	
+			auto player_position_index = posToIndex(players.getPosition(player));
+			
+			#if UNSAFE_OTHERS
+				auto move_index = moveToIndex(move);
+				if (move_index < 4) {
+					players.getPosition(player) += dirToVec(DIRECTION_ARRAY[move_index]);
+				}
+				else if (move_index < 8) {
+					bullets.addBulletAtIndex(player_position_index, DIRECTION_ARRAY[move_index - 4]);
+				}
 
-			// @TODO this switch could be refactored somehow..
-			// @OPT: switches are slow due to switch value check
-			switch (move) {
-				case Move::GO_UP:
-					players.getPosition(player) += dirToVec(Direction::UP);
-					break;
-				case Move::GO_DOWN:
-					players.getPosition(player) += dirToVec(Direction::DOWN);
-					break;
-				case Move::GO_LEFT:
-					players.getPosition(player) += dirToVec(Direction::LEFT);
-					break;
-				case Move::GO_RIGHT:
-					players.getPosition(player) += dirToVec(Direction::RIGHT);
-					break;
-				case Move::SHOOT_UP:
-					bullets.addBullet(players.getPosition(player), Direction::UP);
-					break;
-				case Move::SHOOT_DOWN:
-					bullets.addBullet(players.getPosition(player), Direction::DOWN);
-					break;
-				case Move::SHOOT_LEFT:
-					bullets.addBullet(players.getPosition(player), Direction::LEFT);
-					break;
-				case Move::SHOOT_RIGHT:
-					bullets.addBullet(players.getPosition(player), Direction::RIGHT);
-					break;
-				case Move::WAIT:
-					// do nothing
-					break;
-			}			
+			#else
+				switch (move) {
+					case Move::GO_UP:
+						players.getPosition(player) += dirToVec(Direction::UP);
+						break;
+					case Move::GO_DOWN:
+						players.getPosition(player) += dirToVec(Direction::DOWN);
+						break;
+					case Move::GO_LEFT:
+						players.getPosition(player) += dirToVec(Direction::LEFT);
+						break;
+					case Move::GO_RIGHT:
+						players.getPosition(player) += dirToVec(Direction::RIGHT);
+						break;
+					case Move::SHOOT_UP:
+						bullets.addBulletAtIndex(player_position_index, Direction::UP);
+						break;
+					case Move::SHOOT_DOWN:
+						bullets.addBulletAtIndex(player_position_index, Direction::DOWN);
+						break;
+					case Move::SHOOT_LEFT:
+						bullets.addBulletAtIndex(player_position_index, Direction::LEFT);
+						break;
+					case Move::SHOOT_RIGHT:
+						bullets.addBulletAtIndex(player_position_index, Direction::RIGHT);
+						break;
+					case Move::WAIT:
+						// do nothing
+						break;
+				}
+			#endif	
 		}
 
 		if (players.getHeroPosition() == players.getEnemyPosition()) {
@@ -920,22 +1050,26 @@ struct GameState {
 	}
 
 	bool isTerminal() const {
-		return bullets.isBulletAt(players.getHeroPosition()) or bullets.isBulletAt(players.getEnemyPosition());
+		return bullets.isBulletAtIndex(posToIndex(players.getHeroPosition()))
+			or bullets.isBulletAtIndex(posToIndex(players.getEnemyPosition()));
 	}
 
 	PositionEvaluation evaluate() const {
-		bool hero_hit = bullets.isBulletAt(players.getHeroPosition());
-		bool enemy_hit = bullets.isBulletAt(players.getEnemyPosition());
+		bool hero_hit = bullets.isBulletAtIndex(posToIndex(players.getHeroPosition()));
+		bool enemy_hit = bullets.isBulletAtIndex(posToIndex(players.getEnemyPosition()));
 
 		if (hero_hit or enemy_hit) {
 			return {
-				bullets.isBulletAt(players.getHeroPosition()),
-				bullets.isBulletAt(players.getEnemyPosition())
+				hero_hit,
+				enemy_hit
 			};
 		}
 
 		// no hero hit
-		// not enemy hit
+		// no enemy hit
+
+		// @opt: this can be made static:
+		BoolLayer negative_walls = walls.negated();
 
 		SurvivalData hero_u;
 		SurvivalData hero_c;
@@ -950,13 +1084,18 @@ struct GameState {
 		GhostPlayerLayer enemy_c_ghosts(players.getEnemyPosition());
 		GhostPlayerLayer enemy_u_ghosts(players.getEnemyPosition());
 
-		BulletLayer hero_c_bullets;
-		BulletLayer enemy_c_bullets;
+		BulletLayer hero_c_bullets = lookup_bullets;
+		BulletLayer enemy_c_bullets = lookup_bullets;
 
 		// @TODO: make it less boilerplate'y
 
 		// @OPT making one struct here for quad opers
 		// could be way faster
+
+		u64 hc_count = 0;
+		u64 hu_count = 0;
+		u64 ec_count = 0;
+		u64 eu_count = 0;
 
 		for (u64 i = 0; i < conf::MAX_ROUND_LOOKUP; i++) {
 			// sim step:
@@ -966,49 +1105,48 @@ struct GameState {
 			enemy_c_ghosts.shootOnLayer(enemy_c_bullets);
 			
 			// move ghosts:
-			hero_c_ghosts.moveGhostsEverywhere();
-			hero_u_ghosts.moveGhostsEverywhere();
-			enemy_c_ghosts.moveGhostsEverywhere();
-			enemy_u_ghosts.moveGhostsEverywhere();
+			hero_c_ghosts.moveGhostsEverywhere(negative_walls);
+			hero_u_ghosts.moveGhostsEverywhere(negative_walls);
+			enemy_c_ghosts.moveGhostsEverywhere(negative_walls);
+			enemy_u_ghosts.moveGhostsEverywhere(negative_walls);
 
 			// move bullets:
 			lookup_bullets.moveBulletsWithWalls(walls);
 			hero_c_bullets.moveBulletsWithWalls(walls);
 			enemy_c_bullets.moveBulletsWithWalls(walls);
 
-			// elim ghosts with walls:
-			hero_c_ghosts.eliminateGhostsAt(walls);
-			hero_u_ghosts.eliminateGhostsAt(walls);
-			enemy_c_ghosts.eliminateGhostsAt(walls);
-			enemy_u_ghosts.eliminateGhostsAt(walls);
+			// @OPT: flatten (and negate) lookup_bullets bullets here, might be faster, as compiler might not notice it
+			// once this is done, keeping enemy_c_bullets, hero_c_bullets,
+			// without lookup_bullets might be faster as well,
+			// since there will be faster propagation (less flips)
+
+			// elim ghosts with walls (done in moveGhostsEverywhere)
 
 			// elim ghost with bullets:
-			hero_c_ghosts.eliminateGhostsAt(lookup_bullets);
-			hero_u_ghosts.eliminateGhostsAt(lookup_bullets);
-			enemy_c_ghosts.eliminateGhostsAt(lookup_bullets);
-			enemy_u_ghosts.eliminateGhostsAt(lookup_bullets);
+			hc_count = hero_c_ghosts.eliminateGhostsAt(lookup_bullets);
+			ec_count = enemy_c_ghosts.eliminateGhostsAt(lookup_bullets);
+			
+			hu_count = hero_u_ghosts.eliminateGhostsAt(enemy_c_bullets);
+			eu_count = enemy_u_ghosts.eliminateGhostsAt(hero_c_bullets);
 
-			hero_u_ghosts.eliminateGhostsAt(enemy_c_bullets);
-			enemy_u_ghosts.eliminateGhostsAt(hero_c_bullets);
-
-			if (hero_c_ghosts.ghostCount() > 0) {
+			if (hc_count > 0) {
 				hero_c.round_count = i + 1;
 			}
-			if (hero_u_ghosts.ghostCount() > 0) {
+			if (hu_count > 0) {
 				hero_u.round_count = i + 1;
 			}
-			if (enemy_c_ghosts.ghostCount() > 0) {
+			if (ec_count > 0) {
 				enemy_c.round_count = i + 1;
 			}
-			if (enemy_u_ghosts.ghostCount() > 0) {
+			if (eu_count > 0) {
 				enemy_u.round_count = i + 1;
 			}
 		}
 
-		hero_c.ghost_count  = hero_c_ghosts.ghostCount();
-		hero_u.ghost_count  = hero_u_ghosts.ghostCount();
-		enemy_c.ghost_count = enemy_c_ghosts.ghostCount();
-		enemy_u.ghost_count = enemy_u_ghosts.ghostCount();
+		hero_c.ghost_count  = hc_count;
+		hero_u.ghost_count  = hu_count;
+		enemy_c.ghost_count = ec_count;
+		enemy_u.ghost_count = eu_count;
 	
 		return {
 			hero_c,
@@ -1030,7 +1168,6 @@ struct ABGameState {
 	std::optional<Move> hero_move_commit;
 };
 
-
 namespace alpha_beta {
 	template<bool INITIAL>
 	struct ABRetType {
@@ -1045,25 +1182,29 @@ namespace alpha_beta {
 
 	constinit static u64 leaf_counter = 0;
 
-	template<bool INITIAL = false, bool IS_HERO_TURN>
+	static inline ABGameState static_states[conf::AB_DEPTH * 2 + 2];
+
+	template<bool INITIAL, bool IS_HERO_TURN>
 	auto alphaBeta(
-		ABGameState state,
 		u64 remaining_depth,
+		u64 state_depth,
 		PositionEvaluation alpha,
 		PositionEvaluation beta)
 	-> ABRetType<INITIAL>::type	{
+
+		const auto& state = static_states[state_depth];
 		
 		static_assert(implies(INITIAL, IS_HERO_TURN), "Initial call should be hero turn");
 		
 		// @opt: for now we just pass copies of the state, but
 		// in the future we should pass references to the state
 		// and apply/undo diffs.
+		// @note: its not that simple, since bullets create large diffs...
 
 		const u64 next_remaining_depth = IS_HERO_TURN ? remaining_depth : remaining_depth - 1;
 
 		if constexpr (IS_HERO_TURN) {
-			[[unlikely]]
-			if (remaining_depth == 0 or state.state.isTerminal()) {
+			if (remaining_depth == 0 or state.state.isTerminal()) [[unlikely]] {
 				if constexpr (INITIAL) {
 					assert(false); // static_assertion fails hare
 				}
@@ -1080,13 +1221,14 @@ namespace alpha_beta {
 
 			for (auto move: MOVE_ARRAY)
 			if (state.state.isMoveSensible(move, Player::HERO)) {
-			
-				ABGameState new_state = state;
+
+				// @note: notice we operate on the same state here:
+				auto& new_state = static_states[state_depth];
 				new_state.hero_move_commit = move;
 
 				auto move_value = alphaBeta<false, not IS_HERO_TURN>(
-					std::move(new_state),
 					next_remaining_depth,
+					state_depth,
 					alpha,
 					beta
 				);
@@ -1098,6 +1240,9 @@ namespace alpha_beta {
 				
 				if (value > beta) {
 					break; // β cutoff
+				}
+				if (value.isWining()) {
+					break; // win cutoff
 				}
 
 				alpha = std::max(alpha, value);
@@ -1118,8 +1263,14 @@ namespace alpha_beta {
 			for (auto move: MOVE_ARRAY)
 			if (state.state.isMoveSensible(move, Player::ENEMY)) {
 
-				ABGameState new_state = state;
-				new_state.hero_move_commit = {};
+				// @opt
+				// we can move bullets once for each "GO" move.
+				// we could also try to preprocess "lookup_bullets"
+				auto& new_state = static_states[state_depth + 1];
+
+				new_state = state;
+				// no need to clear it:
+				// new_state.hero_move_commit = {};
 
 				#if NO_OTHER_CHECKS == 1
 					auto hero_move = *state.hero_move_commit;
@@ -1132,8 +1283,8 @@ namespace alpha_beta {
 				new_state.state.applyMove(hero_move, enemy_move);
 
 				auto move_value = alphaBeta<false, not IS_HERO_TURN>(
-					std::move(new_state),
 					next_remaining_depth,
+					state_depth + 1,
 					alpha,
 					beta
 				);
@@ -1142,6 +1293,9 @@ namespace alpha_beta {
 
 				if (value < alpha) {
 					break; // α cutoff
+				}
+				if (value.isLosing()) {
+					break; // loss cutoff
 				}
 
 				beta = std::min(beta, value);
@@ -1152,17 +1306,20 @@ namespace alpha_beta {
 	}
 }
 
+[[gnu::cold]]
 Move findBestHeroMove(GameState state) {
 	ABGameState ab_state = {std::move(state), std::nullopt};
+	alpha_beta::static_states[0] = std::move(ab_state);
+
 	auto res = alpha_beta::alphaBeta<true, true>(
-		std::move(ab_state),
 		conf::AB_DEPTH,
+		0,
 		PositionEvaluation::losing(),
 		PositionEvaluation::wining()
 	);
 
 	res.second.debugPrint();
-	std::cerr << "\n";
+	std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
 	return res.first;
 }
@@ -1171,17 +1328,27 @@ Move findBestHeroMove(GameState state) {
  * @note: it sets globals n, m, round_number
  * @return GameState 
  */
+[[gnu::cold]]
 GameState readInput() {
+	u64 local_n, local_m;
 	{
+		std::cin >> local_n >> local_m;
 		#if CONST_NM == 1
-			u64 local_n, local_m;
-			std::cin >> local_n >> local_m;
-			assert(n == local_n);
-			assert(m == local_m);
+			#if ALLOW_BIGGER_NM == 1
+				assert(local_n <= n);
+				assert(local_m <= m);
+			#else
+				assert(local_n == n);
+				assert(local_m == m);
+			#endif
 		#else 
-			std::cin >> ::n >> ::m;
+			::n = local_n;
+			::m = local_m;
+			::nm = ::n * ::m;
 		#endif
 		
+		assert(::nm == ::n * ::m);
+
 		skipNewLine();
 		global_params_set = true;
 	}
@@ -1193,8 +1360,8 @@ GameState readInput() {
 	Vec red_player;
 	Vec blue_player;
 
-	for (i64 i = 0; i < i64(n); i++) {
-		for (i64 j = 0; j < i64(m); j++) {
+	for (i64 i = 0; i < i64(local_n); i++) {
+		for (i64 j = 0; j < i64(local_m); j++) {
 			for (u64 dummy = 0; dummy < 4; dummy++) {
 				char c;
 				std::cin >> std::noskipws >> c;
@@ -1243,8 +1410,9 @@ GameState readInput() {
 	assert(who_are_we == 'R' || who_are_we == 'B');
 
 	GameState game_state = {
-		.walls = BoolLayer::fromVec(walls),
-
+		#if STATIC_WALLS != 1
+			.walls = BoolLayer::fromVec(walls),
+		#endif
 		.bullets = {{
 			BoolLayer::fromVec(bullets.up()), 
 			BoolLayer::fromVec(bullets.down()),
@@ -1255,6 +1423,10 @@ GameState readInput() {
 		.players = { who_are_we == 'R' ? red_player : blue_player,
 		             who_are_we == 'R' ? blue_player : red_player }
 	};
+
+	#if STATIC_WALLS == 1
+		GameState::walls = BoolLayer::fromVec(walls);
+	#endif
 
 	return game_state;
 }
@@ -1313,12 +1485,12 @@ void ghostTest(GameState game_state) {
 		std::cout << std::flush;
 
 		// move:
-		ghosts.moveGhostsEverywhere();
+		ghosts.moveGhostsEverywhere(walls);
 		bullets.moveBulletsWithWalls(walls);
 
 		// eliminations:
 		ghosts.eliminateGhostsAt(bullets);
-		ghosts.eliminateGhostsAt(walls);
+		// ghosts.eliminateGhostsAt(walls);
 		
 		
 	}
@@ -1336,11 +1508,21 @@ int main() {
 	auto best_move = findBestHeroMove(std::move(game_state));
 	std::cout << moveToIndex(best_move) << "\n";
 
-	std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
-
 	// exampleScenario(game_state);
 	// ghostTest(game_state);
 	
 }
 
 
+
+
+
+
+
+/*
+notes:
+	3_4 wins with 2_10
+	2_10 seams better then 2_32
+
+
+*/
