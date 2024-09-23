@@ -3,11 +3,12 @@
 #include <vector>
 #include <array>
 #include <optional>
+#include <bitset>
 
 namespace {
 
 #define CONST_NM 1
-#define NO_VECTOR_IF_POSSIBLE 0
+#define BIT_SET 0
 #define LEAK_NO_VEC_MEM 0
 #define NO_BOUND_CHECKS 1
 #define NO_OTHER_CHECKS 1
@@ -332,86 +333,52 @@ struct Bool {
 
 struct BoolLayer {
 private:
-	#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
-		struct BoolArr {
-			// @TODO: does it work?
-			bool arr[nm] = { false };
-		};
-		struct BoolArrPtr {
-			BoolArr* ptr;
-
-			BoolArrPtr(): ptr(new BoolArr()) {}
-			BoolArrPtr(const BoolArrPtr& other) {
-				ptr = new BoolArr(*other.ptr);
-			}
-			BoolArrPtr(BoolArrPtr&& other) {
-				ptr = other.ptr;
-				other.ptr = nullptr;
-			};
-			BoolArrPtr& operator=(const BoolArrPtr& other) {
-				// @opt: memcpy
-				for (u64 i = 0; i < nm; i++) {
-					ptr->arr[i] = other.ptr->arr[i];
-				}
-				return *this;
-			};
-			BoolArrPtr& operator=(BoolArrPtr&& other) {
-				// @opt: memcpy
-				for (u64 i = 0; i < nm; i++) {
-					ptr->arr[i] = other.ptr->arr[i];
-				}
-				return *this;
-			}
-
-			~BoolArrPtr() {
-				#if LEAK_NO_VEC_MEM == 1
-					// do nothing
-				#else
-					delete ptr;
-				#endif
-			}
-		};
-
-		BoolArrPtr bullets;
-		// @note: having in on stack might be bad
+	#if (CONST_NM == 1) && (BIT_SET == 1)
+		using BIT_SET_T = std::bitset<nm>;
+		BIT_SET_T bullets;
 	#else
-		std::vector<Bool> bullets;
+		std::vector<Bool> bullets{nm, {false}};
 	#endif
 
 public:
 
-	bool atIndex(u64 index) const {
-		#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
-			// @note: no bound check here..
-			return this->bullets.ptr->arr[index];
-		#else
+	#if (CONST_NM == 1) && (BIT_SET == 1)
+		bool atIndex(u64 index) const {
+			#if NO_BOUND_CHECKS == 1
+				return this->bullets[index];
+			#else 
+				return this->bullets.test(index);
+			#endif
+		}
+		auto atIndexMut(u64 index) {
+			#if NO_BOUND_CHECKS == 1
+				return this->bullets[index];
+			#else 
+				return this->bullets.test(index);
+			#endif
+		}
+	#else
+		bool atIndex(u64 index) const {
 			#if NO_BOUND_CHECKS == 1
 				return this->bullets[index].b;
 			#else 
 				return this->bullets.at(index).b;
 			#endif
-		#endif
-	}
+		}
 
-	bool& atIndexMut(u64 index) {
-		#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
-			// @note: no bound check here..
-			return this->bullets.ptr->arr[index];
-		#else
+
+		bool& atIndexMut(u64 index) {
 			#if NO_BOUND_CHECKS == 1
 				return this->bullets[index].b;
 			#else 
 				return this->bullets.at(index).b;
 			#endif
-		#endif
-	}
+		}
+	#endif
 
 public:
-	#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
-		BoolLayer() = default;
-	#else
-		BoolLayer(): bullets(nm, {false}) {}
-	#endif
+	BoolLayer() = default;
+
 
 	BoolLayer(const BoolLayer& other) = default;
 	BoolLayer(BoolLayer&& other)      = default;
@@ -428,7 +395,8 @@ public:
 	}
 
 	void andAt(Vec pos, bool v) {
-		atIndexMut(posToIndex(pos)) &= v;
+		bool curr = atIndex(posToIndex(pos));
+		atIndexMut(posToIndex(pos)) = curr and v;
 	}
 
 	static BoolLayer fromVec(const std::vector<Vec>& vecs) {
@@ -819,8 +787,10 @@ public:
 
 	void eliminateGhostsAt(const BoolLayer& eliminations) {
 		for (i64 i = 0; i < i64(nm); i++) {
-			// for (i64 j = 0; j < i64(m); j++) {
 				ghosts.atIndexMut(i) &= (!eliminations.atIndex(i));
+				ghosts.atIndexMut(i) &= (!eliminations.atIndex(i));
+			// }
+			ghosts.atIndexMut(i) &= (!eliminations.atIndex(i));
 			// }
 		}
 	}
@@ -851,8 +821,10 @@ public:
 			if (ghosts.atIndex(i)) {
 				for (auto dir: DIRECTION_ARRAY) {
 					auto new_pos = moveIndexPos(i, dir);
-					new_ghosts.atIndexMut(new_pos) |= 
-						(not walls.atIndex(new_pos));
+
+					auto curr = new_ghosts.atIndex(new_pos);
+					new_ghosts.atIndexMut(new_pos) = 
+						curr | (not walls.atIndex(new_pos));
 				}
 			}
 		}
