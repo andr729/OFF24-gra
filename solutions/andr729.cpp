@@ -490,25 +490,17 @@ public:
 				{ {Direction::UP, -m}, {Direction::DOWN, m}, {Direction::LEFT, -1}, {Direction::RIGHT, 1} }	
 			};
 
-			// move the bullets:
-			for (auto [dir, shift]: DIR_SHIFT_ARR) {
-				bullets.get(dir).getBitsetMut() =
-					// @note: here shifts are reversed, cause
-					// bitset has its bits reversed... ???
-					shift < 0 ?
-					(this->getBullets(dir).getBitset() >> (-shift)) :
-					(this->getBullets(dir).getBitset() << shift);
-			}
-
-			// flip them:
-			// @TODO: put static cast in function:
-	
+			this->getBulletsMut(Direction::UP).getBitsetMut() >> m;
+			this->getBulletsMut(Direction::DOWN).getBitsetMut() << m;
+			this->getBulletsMut(Direction::LEFT).getBitsetMut() >> 1;
+			this->getBulletsMut(Direction::RIGHT).getBitsetMut() << 1;
+			
+			// flip them:	
 			for (i64 i = 0; i < i64(nm); i++) {
 				for (auto [dir, shift]: DIR_SHIFT_ARR) {
 					// here we don't care about double flips, cause
-					// unflipped bullets will only be, where there are no walls!
-					// bool collision = wall_collisions[static_cast<u64>(dir)][i];
-
+					// flipped bullets will only be, where there are no walls!
+					
 					if (walls.atIndex(i) and bullets.get(dir).atIndex(i)) [[unlikely]] {
 						bullets.get(dir).atIndexMut(i) = false;
 						bullets.get(flip(dir)).atIndexMut(i - shift) = true;
