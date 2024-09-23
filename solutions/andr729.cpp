@@ -9,7 +9,6 @@ namespace {
 
 #define CONST_NM 1
 #define BIT_SET 1
-#define LEAK_NO_VEC_MEM 0
 #define NO_BOUND_CHECKS 1
 #define NO_OTHER_CHECKS 1
 #define UNSAFE_OTHERS 1
@@ -23,19 +22,19 @@ using i32 = int32_t;
 
 namespace conf {
 	// note: we want to optimize it so we have 12/3 here
-	constexpr u64 MAX_ROUND_LOOKUP = 6;
-	constexpr u64 AB_DEPTH = 3;
+	constexpr u64 MAX_ROUND_LOOKUP = 4;
+	constexpr u64 AB_DEPTH = 4;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;
 
-	constexpr double TIE_COEFF = 1000;
+	constexpr double TIE_COEFF = 0;
 
 	// @TODO: optimize those parameters:
 	// Those values are arbitrary for now:
-	constexpr double HERO_C_COEFF  = 4.0;
-	constexpr double HERO_U_COEFF  = 4.0;
-	constexpr double ENEMY_U_COEFF = -8.0;
+	constexpr double HERO_C_COEFF  = 8.0;
+	constexpr double HERO_U_COEFF  = 1.0;
+	constexpr double ENEMY_U_COEFF = -1.0;
 	constexpr double ENEMY_C_COEFF = -8.0;
 }
 
@@ -354,7 +353,7 @@ public:
 			#if NO_BOUND_CHECKS == 1
 				return this->bullets[index];
 			#else 
-				return this->bullets.test(index);
+				return this->bullets[index];
 			#endif
 		}
 
@@ -481,36 +480,77 @@ public:
 	}
 
 	void moveBulletsWithWalls(const BoolLayer& walls ) {
-		// @TODO: not bitset stuff here for now
+		#if BIT_SET == 1
+			// @TODO: -m/+m/-1/+1 are duplicated here:
+			constexpr static std::array<std::pair<Direction, i64>, 4> DIR_SHIFT_ARR = {
+				{ {Direction::UP, -m}, {Direction::DOWN, m}, {Direction::LEFT, -1}, {Direction::RIGHT, 1} }	
+			};
 
-		// ideally we want to do it inplace for performance..
-		// for now we ignore it
-		BulletLayer new_bullets;
+			BulletLayer new_bullets;
 
-		for (u64 i = 0; i < nm; i++) {
-			for (auto dir: DIRECTION_ARRAY) {
-				i64 pos = i;
-				if (bullets.get(dir).atIndex(i)) {
-					i64 new_pos = moveIndexPos(i, dir);
+			for (auto [dir, shift]: DIR_SHIFT_ARR) {
+				// move the bullets:
+				new_bullets.getBulletsMut(dir).getBitsetMut() =
+					shift < 0 ?
+					(this->getBullets(dir).getBitset() << (-shift)) :
+					(this->getBullets(dir).getBitset() >> shift);
+			}
 
-					Direction new_dir = dir;
+			BulletLayer new_bullets_after_flip = new_bullets;
 
-					// @TODO: for now we don't check for out of bounds here.
-					// it should never happen for valid inputs.
+			// optimize it...
 
-					// @opt: this if might be eliminatable
-					if (walls.atIndex(new_pos)) {
-						new_dir = flip(dir);
-						new_pos = pos;
+			for (auto [dir, shift]: DIR_SHIFT_ARR) {
+				// flip them:
+				const auto wall_collisions = 
+					(new_bullets.getBullets(dir).getBitset() & walls.getBitset());
+
+				static_assert(nm == wall_collisions.size(), "Bad bitset size");
+
+				for (i64 i = 0; i < i64(nm); i++) {
+					if (wall_collisions[i]) {
+						new_bullets_after_flip.getBulletsMut(dir).atIndexMut(i) = false;
+						
+						// here we have +shift, not -shift cause
+						// bitset indicies are flipped :????
+						auto prev_index = i + shift;
+						
+						new_bullets_after_flip.getBulletsMut(flip(dir)).atIndexMut(prev_index) = true;
 					}
-
-					new_bullets.addBulletAtIndex(new_pos, new_dir);
 				}
 			}
-		}
 
+			this->bullets = std::move(new_bullets_after_flip.bullets);
 
-		*this = std::move(new_bullets);
+		#else
+			// ideally we want to do it inplace for performance..
+			// for now we ignore it
+			BulletLayer new_bullets;
+
+			for (u64 i = 0; i < nm; i++) {
+				for (auto dir: DIRECTION_ARRAY) {
+					i64 pos = i;
+					if (bullets.get(dir).atIndex(i)) {
+						i64 new_pos = moveIndexPos(i, dir);
+
+						Direction new_dir = dir;
+
+						// @TODO: for now we don't check for out of bounds here.
+						// it should never happen for valid inputs.
+
+						// @opt: this if might be eliminatable
+						if (walls.atIndex(new_pos)) {
+							new_dir = flip(dir);
+							new_pos = pos;
+						}
+
+						new_bullets.addBulletAtIndex(new_pos, new_dir);
+					}
+				}
+			}
+
+			*this = std::move(new_bullets);
+		#endif
 	}
 };
 
