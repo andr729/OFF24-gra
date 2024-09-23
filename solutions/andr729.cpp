@@ -9,7 +9,7 @@ namespace {
 
 #define CONST_NM 1
 #define BIT_SET 1
-#define MOVE_BULLETS_VECTOR 0
+#define MOVE_BULLETS_VECTOR 1
 #define NO_BOUND_CHECKS 1
 #define NO_OTHER_CHECKS 1
 #define UNSAFE_OTHERS 1
@@ -462,15 +462,6 @@ public:
 		}
 	#endif
 
-	[[gnu::cold]]
-	bool isBulletAt(Vec pos) const {
-		bool res = false;
-		for (auto dir: DIRECTION_ARRAY) {
-			res |= bullets.get(dir).get(pos);
-		}
-		return res;
-	}
-
 	bool isBulletAtIndex(i64 pos) const {
 		bool res = false;
 		for (auto dir: DIRECTION_ARRAY) {
@@ -492,8 +483,7 @@ public:
 		assert(false);
 	}
 
-	void moveBulletsWithWalls(const BoolLayer& walls ) {
-		
+	void moveBulletsWithWalls(const BoolLayer& walls) {
 		#if (BIT_SET == 1) and (MOVE_BULLETS_VECTOR == 1)
 			// @TODO: -m/+m/-1/+1 are duplicated here:
 			constexpr static std::array<std::pair<Direction, i64>, 4> DIR_SHIFT_ARR = {
@@ -510,21 +500,16 @@ public:
 					(this->getBullets(dir).getBitset() << shift);
 			}
 
-			const std::bitset<nm> wall_collisions[4] = {
-				(bullets.get(Direction::UP).getBitset() & walls.getBitset()),
-				(bullets.get(Direction::DOWN).getBitset() & walls.getBitset()),
-				(bullets.get(Direction::LEFT).getBitset() & walls.getBitset()),
-				(bullets.get(Direction::RIGHT).getBitset() & walls.getBitset()),
-			};
-			// optimize it...
+			// flip them:
+			// @TODO: put static cast in function:
+	
+			for (i64 i = 0; i < i64(nm); i++) {
+				for (auto [dir, shift]: DIR_SHIFT_ARR) {
+					// here we don't care about double flips, cause
+					// unflipped bullets will only be, where there are no walls!
+					// bool collision = wall_collisions[static_cast<u64>(dir)][i];
 
-			for (auto [dir, shift]: DIR_SHIFT_ARR) {
-				// flip them:
-				// @TODO: put static cast in function:
-				const auto& collisions = wall_collisions[static_cast<u64>(dir)];
-
-				for (i64 i = 0; i < i64(nm); i++) {
-					if (collisions[i]) [[unlikely]] {
+					if (walls.atIndex(i) and bullets.get(dir).atIndex(i)) [[unlikely]] {
 						bullets.get(dir).atIndexMut(i) = false;
 						bullets.get(flip(dir)).atIndexMut(i - shift) = true;
 					}
@@ -540,19 +525,17 @@ public:
 
 			for (u64 i = 0; i < nm; i++) {
 				for (auto dir: DIRECTION_ARRAY) {
-					i64 pos = i;
 					if (bullets.get(dir).atIndex(i)) {
 						i64 new_pos = moveIndexPos(i, dir);
-
 						Direction new_dir = dir;
 
-						// @TODO: for now we don't check for out of bounds here.
+						// @note: for now we don't check for out of bounds here.
 						// it should never happen for valid inputs.
 
 						// @opt: this if might be eliminatable
-						if (walls.atIndex(new_pos)) {
+						if (walls.atIndex(new_pos)) [[unlikely]] {
 							new_dir = flip(dir);
-							new_pos = pos;
+							new_pos = i;
 						}
 
 						new_bullets.addBulletAtIndex(new_pos, new_dir);
@@ -1181,8 +1164,7 @@ namespace alpha_beta {
 		const u64 next_remaining_depth = IS_HERO_TURN ? remaining_depth : remaining_depth - 1;
 
 		if constexpr (IS_HERO_TURN) {
-			[[unlikely]]
-			if (remaining_depth == 0 or state.state.isTerminal()) {
+			if (remaining_depth == 0 or state.state.isTerminal()) [[unlikely]] {
 				if constexpr (INITIAL) {
 					assert(false); // static_assertion fails hare
 				}
