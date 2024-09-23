@@ -22,8 +22,8 @@ using i32 = int32_t;
 
 namespace conf {
 	// note: we want to optimize it so we have 12/3 here
-	constexpr u64 MAX_ROUND_LOOKUP = 10;
-	constexpr u64 AB_DEPTH = 4;
+	constexpr u64 MAX_ROUND_LOOKUP = 8;
+	constexpr u64 AB_DEPTH = 3;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;
