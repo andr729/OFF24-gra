@@ -23,17 +23,19 @@ using i32 = int32_t;
 
 namespace conf {
 	// note: we want to optimize it so we have 12/3 here
-	constexpr u64 MAX_ROUND_LOOKUP = 8;
-	constexpr u64 AB_DEPTH = 4;
+	constexpr u64 MAX_ROUND_LOOKUP = 6;
+	constexpr u64 AB_DEPTH = 3;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;
 
+	constexpr double TIE_COEFF = 1000;
+
 	// @TODO: optimize those parameters:
 	// Those values are arbitrary for now:
-	constexpr double HERO_C_COEFF  = 8.0;
-	constexpr double HERO_U_COEFF  = 1.0;
-	constexpr double ENEMY_U_COEFF = -1.0;
+	constexpr double HERO_C_COEFF  = 4.0;
+	constexpr double HERO_U_COEFF  = 4.0;
+	constexpr double ENEMY_U_COEFF = -8.0;
 	constexpr double ENEMY_C_COEFF = -8.0;
 }
 
@@ -641,7 +643,11 @@ public:
 	 * @todo: double vs i64
 	 */
 	double getDoubleScore() const {
-		
+		if (isDraw()) {
+			return
+				(conf::HERO_C_COEFF + conf::HERO_U_COEFF +
+				 conf::ENEMY_C_COEFF + conf::ENEMY_U_COEFF) * conf::TIE_COEFF; 
+		}
 
 		return 
 			conf::HERO_C_COEFF  * hero_conditional.doubleScore() +
@@ -1230,7 +1236,7 @@ Move findBestHeroMove(GameState state) {
 	);
 
 	res.second.debugPrint();
-	std::cerr << "\n";
+	std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
 	return res.first;
 }
@@ -1413,8 +1419,6 @@ int main() {
 	// standard:
 	auto best_move = findBestHeroMove(std::move(game_state));
 	std::cout << moveToIndex(best_move) << "\n";
-
-	std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
 
 	// exampleScenario(game_state);
 	// ghostTest(game_state);
