@@ -821,7 +821,6 @@ public:
 
 struct GhostPlayerLayer {
 private:
-	// @opt: hmm.. bitsets?
 	BoolLayer ghosts;
 public:
 	GhostPlayerLayer(Vec initial_pos): ghosts() {
@@ -1069,6 +1068,7 @@ struct GameState {
 		// no hero hit
 		// no enemy hit
 
+		// @opt: this can be made static:
 		BoolLayer negative_walls = walls.negated();
 
 		SurvivalData hero_u;
@@ -1263,6 +1263,9 @@ namespace alpha_beta {
 			for (auto move: MOVE_ARRAY)
 			if (state.state.isMoveSensible(move, Player::ENEMY)) {
 
+				// @opt
+				// we can move bullets once for each "GO" move.
+				// we could also try to preprocess "lookup_bullets"
 				auto& new_state = static_states[state_depth + 1];
 
 				new_state = state;
