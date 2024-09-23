@@ -1115,6 +1115,11 @@ struct GameState {
 			hero_c_bullets.moveBulletsWithWalls(walls);
 			enemy_c_bullets.moveBulletsWithWalls(walls);
 
+			// @OPT: flatten (and negate) lookup_bullets bullets here, might be faster, as compiler might not notice it
+			// once this is done, keeping enemy_c_bullets, hero_c_bullets,
+			// without lookup_bullets might be faster as well,
+			// since there will be faster propagation (less flips)
+
 			// elim ghosts with walls (done in moveGhostsEverywhere)
 
 			// elim ghost with bullets:
