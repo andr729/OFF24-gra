@@ -23,8 +23,8 @@ using i32 = int32_t;
 
 namespace conf {
 	// note: we want to optimize it so we have 12/3 here
-	constexpr u64 MAX_ROUND_LOOKUP = 80;
-	constexpr u64 AB_DEPTH = 3;
+	constexpr u64 MAX_ROUND_LOOKUP = 4;
+	constexpr u64 AB_DEPTH = 4;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;
@@ -450,10 +450,6 @@ public:
 
 	BoolLayer& getBulletsMut(Direction dir) {
 		return bullets.get(dir);
-	}
-
-	void addBullet(Vec pos, Direction dir) {
-		bullets.get(dir).set(pos, true);
 	}
 
 	void addBulletAtIndex(i64 pos, Direction dir) {
@@ -897,12 +893,11 @@ public:
 			// @note: shift by 1 only works
 			// because we have walls on borders
 
-			std::bitset<nm> new_ghosts =
-				ghosts.getBitset() | 
-				(ghosts.getBitset() << m) |
-				(ghosts.getBitset() >> m) |
-				(ghosts.getBitset() << 1) |
-				(ghosts.getBitset() >> 1);
+			std::bitset<nm> new_ghosts = ghosts.getBitset();
+			new_ghosts |= ghosts.getBitset() << m;
+			new_ghosts |= ghosts.getBitset() >> m;
+			new_ghosts |= ghosts.getBitset() << 1;
+			new_ghosts |= ghosts.getBitset() >> 1;
 
 			new_ghosts &= negative_walls.getBitset();
 
@@ -982,6 +977,8 @@ struct GameState {
 
 			// @TODO this switch could be refactored somehow..
 			// @OPT: switches are slow due to switch value check
+			
+			auto player_position_index = posToIndex(players.getPosition(player));
 			switch (move) {
 				case Move::GO_UP:
 					players.getPosition(player) += dirToVec(Direction::UP);
@@ -996,16 +993,16 @@ struct GameState {
 					players.getPosition(player) += dirToVec(Direction::RIGHT);
 					break;
 				case Move::SHOOT_UP:
-					bullets.addBullet(players.getPosition(player), Direction::UP);
+					bullets.addBulletAtIndex(player_position_index, Direction::UP);
 					break;
 				case Move::SHOOT_DOWN:
-					bullets.addBullet(players.getPosition(player), Direction::DOWN);
+					bullets.addBulletAtIndex(player_position_index, Direction::DOWN);
 					break;
 				case Move::SHOOT_LEFT:
-					bullets.addBullet(players.getPosition(player), Direction::LEFT);
+					bullets.addBulletAtIndex(player_position_index, Direction::LEFT);
 					break;
 				case Move::SHOOT_RIGHT:
-					bullets.addBullet(players.getPosition(player), Direction::RIGHT);
+					bullets.addBulletAtIndex(player_position_index, Direction::RIGHT);
 					break;
 				case Move::WAIT:
 					// do nothing
@@ -1167,7 +1164,7 @@ namespace alpha_beta {
 
 	constinit static u64 leaf_counter = 0;
 
-	template<bool INITIAL = false, bool IS_HERO_TURN>
+	template<bool INITIAL, bool IS_HERO_TURN>
 	auto alphaBeta(
 		ABGameState state,
 		u64 remaining_depth,
