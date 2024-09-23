@@ -954,43 +954,52 @@ struct GameState {
 			{std::pair{Player::HERO, hero_move},
 			{Player::ENEMY, enemy_move}}) {
 			
-			// @TODO: for now we don't bound check here
+			// @note: for now we don't bound check here
 			// @TODO: for now we allow "walk into walk"
 			// sensible move check should disallow it
-
-			// @TODO this switch could be refactored somehow..
-			// @OPT: switches are slow due to switch value check
-			
+	
 			auto player_position_index = posToIndex(players.getPosition(player));
-			switch (move) {
-				case Move::GO_UP:
-					players.getPosition(player) += dirToVec(Direction::UP);
-					break;
-				case Move::GO_DOWN:
-					players.getPosition(player) += dirToVec(Direction::DOWN);
-					break;
-				case Move::GO_LEFT:
-					players.getPosition(player) += dirToVec(Direction::LEFT);
-					break;
-				case Move::GO_RIGHT:
-					players.getPosition(player) += dirToVec(Direction::RIGHT);
-					break;
-				case Move::SHOOT_UP:
-					bullets.addBulletAtIndex(player_position_index, Direction::UP);
-					break;
-				case Move::SHOOT_DOWN:
-					bullets.addBulletAtIndex(player_position_index, Direction::DOWN);
-					break;
-				case Move::SHOOT_LEFT:
-					bullets.addBulletAtIndex(player_position_index, Direction::LEFT);
-					break;
-				case Move::SHOOT_RIGHT:
-					bullets.addBulletAtIndex(player_position_index, Direction::RIGHT);
-					break;
-				case Move::WAIT:
-					// do nothing
-					break;
-			}			
+			
+			#if UNSAFE_OTHERS
+				auto move_index = moveToIndex(move);
+				if (move_index < 4) {
+					players.getPosition(player) += dirToVec(DIRECTION_ARRAY[move_index]);
+				}
+				else if (move_index < 8) {
+					bullets.addBulletAtIndex(player_position_index, DIRECTION_ARRAY[move_index - 4]);
+				}
+
+			#else
+				switch (move) {
+					case Move::GO_UP:
+						players.getPosition(player) += dirToVec(Direction::UP);
+						break;
+					case Move::GO_DOWN:
+						players.getPosition(player) += dirToVec(Direction::DOWN);
+						break;
+					case Move::GO_LEFT:
+						players.getPosition(player) += dirToVec(Direction::LEFT);
+						break;
+					case Move::GO_RIGHT:
+						players.getPosition(player) += dirToVec(Direction::RIGHT);
+						break;
+					case Move::SHOOT_UP:
+						bullets.addBulletAtIndex(player_position_index, Direction::UP);
+						break;
+					case Move::SHOOT_DOWN:
+						bullets.addBulletAtIndex(player_position_index, Direction::DOWN);
+						break;
+					case Move::SHOOT_LEFT:
+						bullets.addBulletAtIndex(player_position_index, Direction::LEFT);
+						break;
+					case Move::SHOOT_RIGHT:
+						bullets.addBulletAtIndex(player_position_index, Direction::RIGHT);
+						break;
+					case Move::WAIT:
+						// do nothing
+						break;
+				}
+			#endif	
 		}
 
 		if (players.getHeroPosition() == players.getEnemyPosition()) {
