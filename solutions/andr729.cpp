@@ -22,8 +22,8 @@ using i32 = int32_t;
 
 namespace conf {
 	// note: we want to optimize it so we have 12/3 here
-	constexpr u64 MAX_ROUND_LOOKUP = 4;
-	constexpr u64 AB_DEPTH = 3;
+	constexpr u64 MAX_ROUND_LOOKUP = 10;
+	constexpr u64 AB_DEPTH = 4;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;
@@ -181,6 +181,10 @@ struct Vec {
 
 	constexpr Vec() = default;
 	constexpr Vec(i64 x, i64 y): x(x), y(y) {}
+	// constexpr Vec(const Vec& other) = default;
+	// // constexpr Vec(Vec&& other) = default;
+
+	// constexpr Vec& operator=(const Vec& other) = default;
 	
 	constexpr bool operator==(const Vec& other) const = default;
 
@@ -442,6 +446,7 @@ public:
 	BulletLayer(const BulletLayer& other) = default;
 	BulletLayer(BulletLayer&& other)      = default;
 	
+	BulletLayer& operator=(const BulletLayer& other) = default;
 	BulletLayer& operator=(BulletLayer&& other) = default;
 
 	const BoolLayer& getBullets(Direction dir) const {
@@ -750,6 +755,7 @@ struct PlayerPositions {
 private:
 	Vec player_positions[2];
 public:
+	PlayerPositions() = default;
 	PlayerPositions(Vec hero, Vec enemy): player_positions{hero, enemy} {}
 
 	Vec getPosition(Player player) const {
@@ -1171,13 +1177,17 @@ namespace alpha_beta {
 
 	constinit static u64 leaf_counter = 0;
 
+	static inline ABGameState static_states[conf::AB_DEPTH * 2 + 2];
+
 	template<bool INITIAL, bool IS_HERO_TURN>
 	auto alphaBeta(
-		ABGameState state,
 		u64 remaining_depth,
+		u64 true_depth,
 		PositionEvaluation alpha,
 		PositionEvaluation beta)
 	-> ABRetType<INITIAL>::type	{
+
+		const auto& state = static_states[true_depth];
 		
 		static_assert(implies(INITIAL, IS_HERO_TURN), "Initial call should be hero turn");
 		
@@ -1206,13 +1216,16 @@ namespace alpha_beta {
 
 			for (auto move: MOVE_ARRAY)
 			if (state.state.isMoveSensible(move, Player::HERO)) {
-			
-				ABGameState new_state = state;
+
+				auto& new_state = static_states[true_depth + 1];
+				
+				// @opt: this copy can be eliminated:
+				new_state = state;
 				new_state.hero_move_commit = move;
 
 				auto move_value = alphaBeta<false, not IS_HERO_TURN>(
-					std::move(new_state),
 					next_remaining_depth,
+					true_depth + 1,
 					alpha,
 					beta
 				);
@@ -1247,7 +1260,9 @@ namespace alpha_beta {
 			for (auto move: MOVE_ARRAY)
 			if (state.state.isMoveSensible(move, Player::ENEMY)) {
 
-				ABGameState new_state = state;
+				auto& new_state = static_states[true_depth + 1];
+
+				new_state = state;
 				new_state.hero_move_commit = {};
 
 				#if NO_OTHER_CHECKS == 1
@@ -1261,8 +1276,8 @@ namespace alpha_beta {
 				new_state.state.applyMove(hero_move, enemy_move);
 
 				auto move_value = alphaBeta<false, not IS_HERO_TURN>(
-					std::move(new_state),
 					next_remaining_depth,
+					true_depth + 1,
 					alpha,
 					beta
 				);
@@ -1287,9 +1302,11 @@ namespace alpha_beta {
 [[gnu::cold]]
 Move findBestHeroMove(GameState state) {
 	ABGameState ab_state = {std::move(state), std::nullopt};
+	alpha_beta::static_states[0] = std::move(ab_state);
+
 	auto res = alpha_beta::alphaBeta<true, true>(
-		std::move(ab_state),
 		conf::AB_DEPTH,
+		0,
 		PositionEvaluation::losing(),
 		PositionEvaluation::wining()
 	);
