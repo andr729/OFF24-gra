@@ -336,10 +336,14 @@ struct Bool {
 struct BoolLayer {
 private:
 	#if BIT_SET == 1
+		using DataT = std::bitset<nm>;
 		std::bitset<nm> bullets;
 	#else
+		using DataT = std::vector<Bool>;
 		std::vector<Bool> bullets{nm, {false}};
 	#endif
+
+	BoolLayer(DataT bullets): bullets(bullets) {}
 
 public:
 	#if BIT_SET == 1
@@ -410,6 +414,18 @@ public:
 			res.set(vec, true);
 		}
 		return res;
+	}
+
+	BoolLayer negated() const {
+		#if BIT_SET == 1
+			return BoolLayer(~this->getBitset());
+		#else
+			BoolLayer res;
+			for (i64 i = 0; i < i64(nm); i++) {
+				res.atIndexMut(i) = not this->atIndex(i);
+			}
+			return res;
+		#endif
 	}
 };
 
@@ -871,7 +887,7 @@ public:
 		#endif
 	}
 
-	void moveGhostsEverywhere(const BoolLayer& walls) {
+	void moveGhostsEverywhere(const BoolLayer& negative_walls) {
 		// @todo: no bound checks here -- should not be needed
 
 		// Try to avoid copy -- apparently its very similar the way it is
@@ -888,7 +904,7 @@ public:
 				(ghosts.getBitset() << 1) |
 				(ghosts.getBitset() >> 1);
 
-			new_ghosts &= (~walls.getBitset());
+			new_ghosts &= negative_walls.getBitset();
 
 			this->ghosts.getBitsetMut() = std::move(new_ghosts);
 		#else
@@ -898,10 +914,8 @@ public:
 				if (ghosts.atIndex(i)) {
 					for (auto dir: DIRECTION_ARRAY) {
 						auto new_pos = moveIndexPos(i, dir);
-
-						auto curr = new_ghosts.atIndex(new_pos);
-						new_ghosts.atIndexMut(new_pos) = 
-							curr | (not walls.atIndex(new_pos));
+						new_ghosts.atIndexMut(new_pos) |= 
+							negative_walls.atIndex(new_pos);
 					}
 				}
 			}
@@ -1045,6 +1059,8 @@ struct GameState {
 		// no hero hit
 		// no enemy hit
 
+		BoolLayer negative_walls = walls.negated();
+
 		SurvivalData hero_u;
 		SurvivalData hero_c;
 		SurvivalData enemy_u;
@@ -1079,10 +1095,10 @@ struct GameState {
 			enemy_c_ghosts.shootOnLayer(enemy_c_bullets);
 			
 			// move ghosts:
-			hero_c_ghosts.moveGhostsEverywhere(walls);
-			hero_u_ghosts.moveGhostsEverywhere(walls);
-			enemy_c_ghosts.moveGhostsEverywhere(walls);
-			enemy_u_ghosts.moveGhostsEverywhere(walls);
+			hero_c_ghosts.moveGhostsEverywhere(negative_walls);
+			hero_u_ghosts.moveGhostsEverywhere(negative_walls);
+			enemy_c_ghosts.moveGhostsEverywhere(negative_walls);
+			enemy_u_ghosts.moveGhostsEverywhere(negative_walls);
 
 			// move bullets:
 			lookup_bullets.moveBulletsWithWalls(walls);
