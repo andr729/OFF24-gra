@@ -1182,12 +1182,12 @@ namespace alpha_beta {
 	template<bool INITIAL, bool IS_HERO_TURN>
 	auto alphaBeta(
 		u64 remaining_depth,
-		u64 true_depth,
+		u64 state_depth,
 		PositionEvaluation alpha,
 		PositionEvaluation beta)
 	-> ABRetType<INITIAL>::type	{
 
-		const auto& state = static_states[true_depth];
+		const auto& state = static_states[state_depth];
 		
 		static_assert(implies(INITIAL, IS_HERO_TURN), "Initial call should be hero turn");
 		
@@ -1217,15 +1217,13 @@ namespace alpha_beta {
 			for (auto move: MOVE_ARRAY)
 			if (state.state.isMoveSensible(move, Player::HERO)) {
 
-				auto& new_state = static_states[true_depth + 1];
-				
-				// @opt: this copy can be eliminated:
-				new_state = state;
+				// @note: notice we operate on the same state here:
+				auto& new_state = static_states[state_depth];
 				new_state.hero_move_commit = move;
 
 				auto move_value = alphaBeta<false, not IS_HERO_TURN>(
 					next_remaining_depth,
-					true_depth + 1,
+					state_depth,
 					alpha,
 					beta
 				);
@@ -1260,10 +1258,11 @@ namespace alpha_beta {
 			for (auto move: MOVE_ARRAY)
 			if (state.state.isMoveSensible(move, Player::ENEMY)) {
 
-				auto& new_state = static_states[true_depth + 1];
+				auto& new_state = static_states[state_depth + 1];
 
 				new_state = state;
-				new_state.hero_move_commit = {};
+				// no need to clear it:
+				// new_state.hero_move_commit = {};
 
 				#if NO_OTHER_CHECKS == 1
 					auto hero_move = *state.hero_move_commit;
@@ -1277,7 +1276,7 @@ namespace alpha_beta {
 
 				auto move_value = alphaBeta<false, not IS_HERO_TURN>(
 					next_remaining_depth,
-					true_depth + 1,
+					state_depth + 1,
 					alpha,
 					beta
 				);
