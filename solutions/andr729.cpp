@@ -193,7 +193,6 @@ struct Vec {
 };
 
 constexpr i64 posToIndex(Vec pos) {
-	// @TODO: this is duplicated
 	return pos.x * m + pos.y;
 }
 
@@ -379,11 +378,6 @@ private:
 		std::vector<Bool> bullets;
 	#endif
 
-	// @note: constexpr only if m is constexpr 
-	constexpr static u64 index(i64 x, i64 y) {
-		return x * m + y;
-	}
-
 public:
 
 	bool atIndex(u64 index) const {
@@ -426,15 +420,15 @@ public:
 	BoolLayer& operator=(BoolLayer&& other)      = default;
 
 	bool get(Vec pos) const {
-		return atIndex(index(pos.x, pos.y));
+		return atIndex(posToIndex(pos));
 	}
 
 	void set(Vec pos, bool val) {
-		atIndexMut(index(pos.x, pos.y)) = val;
+		atIndexMut(posToIndex(pos)) = val;
 	}
 
 	void andAt(Vec pos, bool v) {
-		atIndexMut(index(pos.x, pos.y)) &= v;
+		atIndexMut(posToIndex(pos)) &= v;
 	}
 
 	static BoolLayer fromVec(const std::vector<Vec>& vecs) {
@@ -839,11 +833,8 @@ public:
 		// @note: isBulletAt is way faster then eliminateGhostsAt x4
 		u64 count = 0;
 		for (i64 i = 0; i < i64(nm); i++) {
-			// for (i64 j = 0; j < i64(m); j++) {
-				// Vec pos = {i, j};
-				ghosts.atIndexMut(i) &= (!bullets.isBulletAtIndex(i));
-				count += ghosts.atIndex(i);
-			// }
+			ghosts.atIndexMut(i) &= (!bullets.isBulletAtIndex(i));
+			count += ghosts.atIndex(i);
 		}
 		return count;
 	}
@@ -857,33 +848,30 @@ public:
 		BoolLayer new_ghosts = ghosts;
 
 		for (i64 i = 0; i < i64(nm); i++) {
-			// for (i64 j = 0; j < i64(m); j++) {
-
-				auto pos = i;
-				if (ghosts.atIndex(pos)) {
-					for (auto dir: DIRECTION_ARRAY) {
-						auto new_pos = moveIndexPos(pos, dir);
-						new_ghosts.atIndexMut(new_pos) |= 
-							(not walls.atIndex(new_pos));
-					}
+			if (ghosts.atIndex(i)) {
+				for (auto dir: DIRECTION_ARRAY) {
+					auto new_pos = moveIndexPos(i, dir);
+					new_ghosts.atIndexMut(new_pos) |= 
+						(not walls.atIndex(new_pos));
 				}
-			// }
+			}
 		}
+
+		// this is not faster :o:
+		// for (i64 i = 0; i < i64(nm); i++) {
+		// 	new_ghosts.atIndexMut(i) &= 
+		// 		(not walls.atIndex(i));
+		// }
 
 		this->ghosts = std::move(new_ghosts);
 	}
 
 	void shootOnLayer(BulletLayer& bullets) const {
 		for (i64 i = 0; i < i64(nm); i++) {
-			// for (i64 j = 0; j < i64(m); j++) {
-				// Vec pos = {i, j};
-				// if (ghosts.atIndex(i)) {
-					bool shoot = ghosts.atIndex(i);
-					for (auto dir: DIRECTION_ARRAY) {
-						bullets.addBulletAtIndexIf(i, dir, shoot);
-					}
-				// }
-			// }
+			bool shoot = ghosts.atIndex(i);
+			for (auto dir: DIRECTION_ARRAY) {
+				bullets.addBulletAtIndexIf(i, dir, shoot);
+			}
 		}
 	}
 };
