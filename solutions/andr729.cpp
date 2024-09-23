@@ -8,7 +8,7 @@
 namespace {
 
 #define CONST_NM 1
-#define BIT_SET 0
+#define BIT_SET 1
 #define LEAK_NO_VEC_MEM 0
 #define NO_BOUND_CHECKS 1
 #define NO_OTHER_CHECKS 1
@@ -333,16 +333,14 @@ struct Bool {
 
 struct BoolLayer {
 private:
-	#if (CONST_NM == 1) && (BIT_SET == 1)
-		using BIT_SET_T = std::bitset<nm>;
-		BIT_SET_T bullets;
+	#if BIT_SET == 1
+		std::bitset<nm> bullets;
 	#else
 		std::vector<Bool> bullets{nm, {false}};
 	#endif
 
 public:
-
-	#if (CONST_NM == 1) && (BIT_SET == 1)
+	#if BIT_SET == 1
 		bool atIndex(u64 index) const {
 			#if NO_BOUND_CHECKS == 1
 				return this->bullets[index];
@@ -357,6 +355,13 @@ public:
 				return this->bullets.test(index);
 			#endif
 		}
+
+		const auto& getBitset() const {
+			return this->bullets;
+		}
+		auto& getBitsetMut() {
+			return this->bullets;
+		}
 	#else
 		bool atIndex(u64 index) const {
 			#if NO_BOUND_CHECKS == 1
@@ -365,7 +370,6 @@ public:
 				return this->bullets.at(index).b;
 			#endif
 		}
-
 
 		bool& atIndexMut(u64 index) {
 			#if NO_BOUND_CHECKS == 1
@@ -376,7 +380,6 @@ public:
 		}
 	#endif
 
-public:
 	BoolLayer() = default;
 
 
@@ -427,6 +430,10 @@ public:
 		return bullets.get(dir);
 	}
 
+	BoolLayer& getBulletsMut(Direction dir) {
+		return bullets.get(dir);
+	}
+
 	void addBullet(Vec pos, Direction dir) {
 		bullets.get(dir).set(pos, true);
 	}
@@ -435,10 +442,11 @@ public:
 		bullets.get(dir).atIndexMut(pos) = true;
 	}
 
-	void addBulletAtIndexIf(i64 pos, Direction dir, bool if_) {
-		bullets.get(dir).atIndexMut(pos) |= if_;
-	}
-
+	#if BIT_SET == 0
+		void addBulletAtIndexIf(i64 pos, Direction dir, bool if_) {
+			bullets.get(dir).atIndexMut(pos) |= if_;
+		}
+	#endif
 
 	[[gnu::cold]]
 	bool isBulletAt(Vec pos) const {
@@ -471,38 +479,35 @@ public:
 	}
 
 	void moveBulletsWithWalls(const BoolLayer& walls ) {
+		// @TODO: not bitset stuff here for now
+
 		// ideally we want to do it inplace for performance..
 		// for now we ignore it
 		BulletLayer new_bullets;
 
 		for (u64 i = 0; i < nm; i++) {
-			// for (u64 j = 0; j < m; j++) {
-				for (auto dir: DIRECTION_ARRAY) {
-					// Vec pos = {i64(i / m), i64(i % m)};
-					i64 pos = i;
-					if (bullets.get(dir).atIndex(i)) {
-						// Vec new_pos = pos + dirToVec(dir);
-						i64 new_pos = moveIndexPos(i, dir);
+			for (auto dir: DIRECTION_ARRAY) {
+				i64 pos = i;
+				if (bullets.get(dir).atIndex(i)) {
+					i64 new_pos = moveIndexPos(i, dir);
 
-						Direction new_dir = dir;
+					Direction new_dir = dir;
 
-						// @TODO: for now we don't check for out of bounds here.
-						// it should never happen for valid inputs.
+					// @TODO: for now we don't check for out of bounds here.
+					// it should never happen for valid inputs.
 
-						// @opt: this if might be eliminatable
-						if (walls.atIndex(new_pos)) {
-							new_dir = flip(dir);
-							new_pos = pos;
-						}
-
-						new_bullets.addBulletAtIndex(new_pos, new_dir);
+					// @opt: this if might be eliminatable
+					if (walls.atIndex(new_pos)) {
+						new_dir = flip(dir);
+						new_pos = pos;
 					}
+
+					new_bullets.addBulletAtIndex(new_pos, new_dir);
 				}
-			// }
+			}
 		}
 
 
-		// @TODO: make sure it actually moves:
 		*this = std::move(new_bullets);
 	}
 };
@@ -786,13 +791,13 @@ public:
 	}
 
 	void eliminateGhostsAt(const BoolLayer& eliminations) {
-		for (i64 i = 0; i < i64(nm); i++) {
+		#if BIT_SET == 1
+			ghosts.getBitsetMut() &= (~eliminations.getBitset());
+		#else
+			for (i64 i = 0; i < i64(nm); i++) {
 				ghosts.atIndexMut(i) &= (!eliminations.atIndex(i));
-				ghosts.atIndexMut(i) &= (!eliminations.atIndex(i));
-			// }
-			ghosts.atIndexMut(i) &= (!eliminations.atIndex(i));
-			// }
-		}
+			}
+		#endif
 	}
 
 	/**
@@ -800,13 +805,25 @@ public:
 	 * @return u64 number of ghosts after elimination
 	 */
 	u64 eliminateGhostsAt(const BulletLayer& bullets) {
-		// @note: isBulletAt is way faster then eliminateGhostsAt x4
-		u64 count = 0;
-		for (i64 i = 0; i < i64(nm); i++) {
-			ghosts.atIndexMut(i) &= (!bullets.isBulletAtIndex(i));
-			count += ghosts.atIndex(i);
-		}
-		return count;
+		#if BIT_SET == 1
+			auto eliminations =
+				bullets.getBullets(Direction::UP).getBitset() |
+				bullets.getBullets(Direction::DOWN).getBitset() |
+				bullets.getBullets(Direction::LEFT).getBitset() |
+				bullets.getBullets(Direction::RIGHT).getBitset();
+			
+			ghosts.getBitsetMut() &= (~eliminations);
+
+			return ghosts.getBitset().count();
+		#else 
+			// @note: isBulletAt is way faster then eliminateGhostsAt x4
+			u64 count = 0;
+			for (i64 i = 0; i < i64(nm); i++) {
+				ghosts.atIndexMut(i) &= (!bullets.isBulletAtIndex(i));
+				count += ghosts.atIndex(i);
+			}
+			return count;
+		#endif
 	}
 
 	void moveGhostsEverywhere(const BoolLayer& walls) {
@@ -815,36 +832,59 @@ public:
 		// Try to avoid copy -- apparently its very similar the way it is
 		// It may be that compiler optimizes it much better
 
-		BoolLayer new_ghosts = ghosts;
+		#if BIT_SET == 1
+			// @note: shift by 1 only works
+			// because we have walls on borders
 
-		for (i64 i = 0; i < i64(nm); i++) {
-			if (ghosts.atIndex(i)) {
-				for (auto dir: DIRECTION_ARRAY) {
-					auto new_pos = moveIndexPos(i, dir);
+			std::bitset<nm> new_ghosts =
+				ghosts.getBitset() | 
+				(ghosts.getBitset() << m) |
+				(ghosts.getBitset() >> m) |
+				(ghosts.getBitset() << 1) |
+				(ghosts.getBitset() >> 1);
 
-					auto curr = new_ghosts.atIndex(new_pos);
-					new_ghosts.atIndexMut(new_pos) = 
-						curr | (not walls.atIndex(new_pos));
+			new_ghosts &= (~walls.getBitset());
+
+			this->ghosts.getBitsetMut() = std::move(new_ghosts);
+		#else
+			BoolLayer new_ghosts = ghosts;
+
+			for (i64 i = 0; i < i64(nm); i++) {
+				if (ghosts.atIndex(i)) {
+					for (auto dir: DIRECTION_ARRAY) {
+						auto new_pos = moveIndexPos(i, dir);
+
+						auto curr = new_ghosts.atIndex(new_pos);
+						new_ghosts.atIndexMut(new_pos) = 
+							curr | (not walls.atIndex(new_pos));
+					}
 				}
 			}
-		}
 
-		// this is not faster :o:
-		// for (i64 i = 0; i < i64(nm); i++) {
-		// 	new_ghosts.atIndexMut(i) &= 
-		// 		(not walls.atIndex(i));
-		// }
+			// this is not faster :o:
+			// for (i64 i = 0; i < i64(nm); i++) {
+			// 	new_ghosts.atIndexMut(i) &= 
+			// 		(not walls.atIndex(i));
+			// }
 
-		this->ghosts = std::move(new_ghosts);
+			this->ghosts = std::move(new_ghosts);
+		#endif
 	}
 
 	void shootOnLayer(BulletLayer& bullets) const {
-		for (i64 i = 0; i < i64(nm); i++) {
-			bool shoot = ghosts.atIndex(i);
-			for (auto dir: DIRECTION_ARRAY) {
-				bullets.addBulletAtIndexIf(i, dir, shoot);
+		#if BIT_SET == 1
+			bullets.getBulletsMut(Direction::UP).getBitsetMut() |= ghosts.getBitset();
+			bullets.getBulletsMut(Direction::DOWN).getBitsetMut() |= ghosts.getBitset();
+			bullets.getBulletsMut(Direction::LEFT).getBitsetMut() |= ghosts.getBitset();
+			bullets.getBulletsMut(Direction::RIGHT).getBitsetMut() |= ghosts.getBitset();
+		#else
+			for (i64 i = 0; i < i64(nm); i++) {
+				bool shoot = ghosts.atIndex(i);
+				for (auto dir: DIRECTION_ARRAY) {
+					bullets.addBulletAtIndexIf(i, dir, shoot);
+				}
 			}
-		}
+		#endif
 	}
 };
 
