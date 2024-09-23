@@ -14,8 +14,7 @@ namespace {
 #define NO_OTHER_CHECKS 1
 #define UNSAFE_OTHERS 1
 #define ALLOW_BIGGER_NM 1
-
-// @opt: debug/release mode (with macros, so we don't waste opt passes)
+#define STATIC_WALLS 1
 
 using u64 = uint64_t;
 using i64 = int64_t;
@@ -149,6 +148,7 @@ constexpr Direction moveToDir(Move move) {
 }
 
 // @OPT: change the order maybe?
+// @note: can't just do it now
 constexpr std::array<Move, 9> MOVE_ARRAY = {
 	Move::GO_UP,
 	Move::GO_DOWN,
@@ -321,7 +321,7 @@ struct QuadDirStorage {
 	}
 };
 
-
+[[gnu::cold]]
 void skipNewLine() {
 	char c;
 	std::cin >> std::noskipws >> c;
@@ -487,13 +487,17 @@ public:
 		#if (BIT_SET == 1) and (MOVE_BULLETS_VECTOR == 1)
 			// @TODO: -m/+m/-1/+1 are duplicated here:
 			constexpr static std::array<std::pair<Direction, i64>, 4> DIR_SHIFT_ARR = {
-				{ {Direction::UP, -m}, {Direction::DOWN, m}, {Direction::LEFT, -1}, {Direction::RIGHT, 1} }	
+				std::pair{Direction::UP, -i64(m)},
+				{Direction::DOWN, m},
+				{Direction::LEFT, -1},
+				{Direction::RIGHT, 1}	
 			};
-
-			this->getBulletsMut(Direction::UP).getBitsetMut() >> m;
-			this->getBulletsMut(Direction::DOWN).getBitsetMut() << m;
-			this->getBulletsMut(Direction::LEFT).getBitsetMut() >> 1;
-			this->getBulletsMut(Direction::RIGHT).getBitsetMut() << 1;
+			
+			// @note: shifts here are reversed
+			this->getBulletsMut(Direction::UP).getBitsetMut() >>= m;
+			this->getBulletsMut(Direction::DOWN).getBitsetMut() <<= m;
+			this->getBulletsMut(Direction::LEFT).getBitsetMut() >>= 1;
+			this->getBulletsMut(Direction::RIGHT).getBitsetMut() <<= 1;
 			
 			// flip them:	
 			for (i64 i = 0; i < i64(nm); i++) {
@@ -918,9 +922,13 @@ public:
 };
 
 struct GameState {
-	BoolLayer walls;
-	BulletLayer bullets;
+	#if STATIC_WALLS == 1
+		static inline BoolLayer walls;
+	#else
+		BoolLayer walls;
+	#endif
 
+	BulletLayer bullets;
 	PlayerPositions players;
 	
 	void moveBullets() {
@@ -937,8 +945,23 @@ struct GameState {
 		std::cout << "\n";
 	}
 
+	// struct BulletDiff {
+	// 	i64 index;
+	// 	bool value;
+	// };
+	// struct GoBackData {
+	// 	PlayerPositions old_players;
+	// 	BulletDiff bullet_diff[2];
+	// };
+
 	void applyMove(Move hero_move, Move enemy_move) {
 		// 1. first perform players actions:
+
+		// GoBackData go_back = {
+		// 	players,
+		// 	// @todo: we know, there are no bullets here, since there are walls:
+		// 	{{0, false}, {1, false}}
+		// };
 
 		PlayerPositions old_positions = players;
 
@@ -1161,6 +1184,7 @@ namespace alpha_beta {
 		// @opt: for now we just pass copies of the state, but
 		// in the future we should pass references to the state
 		// and apply/undo diffs.
+		// @note: its not that simple, since bullets create large diffs...
 
 		const u64 next_remaining_depth = IS_HERO_TURN ? remaining_depth : remaining_depth - 1;
 
@@ -1362,8 +1386,9 @@ GameState readInput() {
 	assert(who_are_we == 'R' || who_are_we == 'B');
 
 	GameState game_state = {
-		.walls = BoolLayer::fromVec(walls),
-
+		#if STATIC_WALLS != 1
+			.walls = BoolLayer::fromVec(walls),
+		#endif
 		.bullets = {{
 			BoolLayer::fromVec(bullets.up()), 
 			BoolLayer::fromVec(bullets.down()),
@@ -1374,6 +1399,10 @@ GameState readInput() {
 		.players = { who_are_we == 'R' ? red_player : blue_player,
 		             who_are_we == 'R' ? blue_player : red_player }
 	};
+
+	#if STATIC_WALLS == 1
+		GameState::walls = BoolLayer::fromVec(walls);
+	#endif
 
 	return game_state;
 }
