@@ -9,6 +9,7 @@ namespace {
 
 #define CONST_NM 1
 #define BIT_SET 1
+#define MOVE_BULLETS_VECTOR 0
 #define NO_BOUND_CHECKS 1
 #define NO_OTHER_CHECKS 1
 #define UNSAFE_OTHERS 1
@@ -22,8 +23,8 @@ using i32 = int32_t;
 
 namespace conf {
 	// note: we want to optimize it so we have 12/3 here
-	constexpr u64 MAX_ROUND_LOOKUP = 4;
-	constexpr u64 AB_DEPTH = 4;
+	constexpr u64 MAX_ROUND_LOOKUP = 80;
+	constexpr u64 AB_DEPTH = 3;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;
@@ -480,47 +481,45 @@ public:
 	}
 
 	void moveBulletsWithWalls(const BoolLayer& walls ) {
-		#if BIT_SET == 1
+		
+		#if (BIT_SET == 1) and (MOVE_BULLETS_VECTOR == 1)
 			// @TODO: -m/+m/-1/+1 are duplicated here:
 			constexpr static std::array<std::pair<Direction, i64>, 4> DIR_SHIFT_ARR = {
 				{ {Direction::UP, -m}, {Direction::DOWN, m}, {Direction::LEFT, -1}, {Direction::RIGHT, 1} }	
 			};
 
-			BulletLayer new_bullets;
-
+			// move the bullets:
 			for (auto [dir, shift]: DIR_SHIFT_ARR) {
-				// move the bullets:
-				new_bullets.getBulletsMut(dir).getBitsetMut() =
+				bullets.get(dir).getBitsetMut() =
+					// @note: here shifts are reversed, cause
+					// bitset has its bits reversed... ???
 					shift < 0 ?
-					(this->getBullets(dir).getBitset() << (-shift)) :
-					(this->getBullets(dir).getBitset() >> shift);
+					(this->getBullets(dir).getBitset() >> (-shift)) :
+					(this->getBullets(dir).getBitset() << shift);
 			}
 
-			BulletLayer new_bullets_after_flip = new_bullets;
-
+			const std::bitset<nm> wall_collisions[4] = {
+				(bullets.get(Direction::UP).getBitset() & walls.getBitset()),
+				(bullets.get(Direction::DOWN).getBitset() & walls.getBitset()),
+				(bullets.get(Direction::LEFT).getBitset() & walls.getBitset()),
+				(bullets.get(Direction::RIGHT).getBitset() & walls.getBitset()),
+			};
 			// optimize it...
 
 			for (auto [dir, shift]: DIR_SHIFT_ARR) {
 				// flip them:
-				const auto wall_collisions = 
-					(new_bullets.getBullets(dir).getBitset() & walls.getBitset());
-
-				static_assert(nm == wall_collisions.size(), "Bad bitset size");
+				// @TODO: put static cast in function:
+				const auto& collisions = wall_collisions[static_cast<u64>(dir)];
 
 				for (i64 i = 0; i < i64(nm); i++) {
-					if (wall_collisions[i]) {
-						new_bullets_after_flip.getBulletsMut(dir).atIndexMut(i) = false;
-						
-						// here we have +shift, not -shift cause
-						// bitset indicies are flipped :????
-						auto prev_index = i + shift;
-						
-						new_bullets_after_flip.getBulletsMut(flip(dir)).atIndexMut(prev_index) = true;
+					if (collisions[i]) [[unlikely]] {
+						bullets.get(dir).atIndexMut(i) = false;
+						bullets.get(flip(dir)).atIndexMut(i - shift) = true;
 					}
 				}
 			}
 
-			this->bullets = std::move(new_bullets_after_flip.bullets);
+			// no assign, we do it inp place
 
 		#else
 			// ideally we want to do it inplace for performance..
