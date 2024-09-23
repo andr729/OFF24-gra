@@ -12,6 +12,7 @@ namespace {
 #define NO_BOUND_CHECKS 1
 #define NO_OTHER_CHECKS 1
 #define UNSAFE_OTHERS 1
+#define ALLOW_BIGGER_NM 1
 
 // @opt: debug/release mode (with macros, so we don't waste opt passes)
 
@@ -35,19 +36,17 @@ namespace conf {
 	constexpr double ENEMY_C_COEFF = -8.0;
 }
 
-
-// constexpr u64 N = 15;
-// constexpr u64 M = 20;
-
 /*******************/
 // Global parameters:
 
 #if CONST_NM == 1
 	constexpr u64 n = 15;
 	constexpr u64 m = 20;
+	constexpr u64 nm = n * m;
 #else
 	static u64 n;
 	static u64 m;
+	static u64 nm;
 #endif
 
 constexpr u64 MAX_ROUND = 400;
@@ -337,7 +336,7 @@ private:
 	#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
 		struct BoolArr {
 			// @TODO: does it work?
-			bool arr[n * m] = { false };
+			bool arr[nm] = { false };
 		};
 		struct BoolArrPtr {
 			BoolArr* ptr;
@@ -352,14 +351,14 @@ private:
 			};
 			BoolArrPtr& operator=(const BoolArrPtr& other) {
 				// @opt: memcpy
-				for (u64 i = 0; i < n * m; i++) {
+				for (u64 i = 0; i < nm; i++) {
 					ptr->arr[i] = other.ptr->arr[i];
 				}
 				return *this;
 			};
 			BoolArrPtr& operator=(BoolArrPtr&& other) {
 				// @opt: memcpy
-				for (u64 i = 0; i < n * m; i++) {
+				for (u64 i = 0; i < nm; i++) {
 					ptr->arr[i] = other.ptr->arr[i];
 				}
 				return *this;
@@ -417,7 +416,7 @@ public:
 	#if (CONST_NM == 1) && (NO_VECTOR_IF_POSSIBLE == 1)
 		BoolLayer() = default;
 	#else
-		BoolLayer(): bullets(n * m, {false}) {}
+		BoolLayer(): bullets(nm, {false}) {}
 	#endif
 
 	BoolLayer(const BoolLayer& other) = default;
@@ -514,7 +513,7 @@ public:
 		// for now we ignore it
 		BulletLayer new_bullets;
 
-		for (u64 i = 0; i < n*m; i++) {
+		for (u64 i = 0; i < nm; i++) {
 			// for (u64 j = 0; j < m; j++) {
 				for (auto dir: DIRECTION_ARRAY) {
 					// Vec pos = {i64(i / m), i64(i % m)};
@@ -824,18 +823,8 @@ public:
 		return ghosts;
 	}
 
-	// [[maybe_unused]]
-	// [[gnu::cold]]
-	// u64 ghostCount() const {
-	// 	u64 count = 0;
-	// 	for (i64 i = 0; i < i64(n*m); i++) {
-	// 		count += ghosts.atIndex(i);
-	// 	}
-	// 	return count;
-	// }
-
 	void eliminateGhostsAt(const BoolLayer& eliminations) {
-		for (i64 i = 0; i < i64(n*m); i++) {
+		for (i64 i = 0; i < i64(nm); i++) {
 			// for (i64 j = 0; j < i64(m); j++) {
 				ghosts.atIndexMut(i) &= (!eliminations.atIndex(i));
 			// }
@@ -849,7 +838,7 @@ public:
 	u64 eliminateGhostsAt(const BulletLayer& bullets) {
 		// @note: isBulletAt is way faster then eliminateGhostsAt x4
 		u64 count = 0;
-		for (i64 i = 0; i < i64(n*m); i++) {
+		for (i64 i = 0; i < i64(nm); i++) {
 			// for (i64 j = 0; j < i64(m); j++) {
 				// Vec pos = {i, j};
 				ghosts.atIndexMut(i) &= (!bullets.isBulletAtIndex(i));
@@ -867,7 +856,7 @@ public:
 
 		BoolLayer new_ghosts = ghosts;
 
-		for (i64 i = 0; i < i64(n*m); i++) {
+		for (i64 i = 0; i < i64(nm); i++) {
 			// for (i64 j = 0; j < i64(m); j++) {
 
 				auto pos = i;
@@ -885,7 +874,7 @@ public:
 	}
 
 	void shootOnLayer(BulletLayer& bullets) const {
-		for (i64 i = 0; i < i64(n*m); i++) {
+		for (i64 i = 0; i < i64(nm); i++) {
 			// for (i64 j = 0; j < i64(m); j++) {
 				// Vec pos = {i, j};
 				// if (ghosts.atIndex(i)) {
@@ -1252,16 +1241,25 @@ Move findBestHeroMove(GameState state) {
  */
 [[gnu::cold]]
 GameState readInput() {
+	u64 local_n, local_m;
 	{
+		std::cin >> local_n >> local_m;
 		#if CONST_NM == 1
-			u64 local_n, local_m;
-			std::cin >> local_n >> local_m;
-			assert(n == local_n);
-			assert(m == local_m);
+			#if ALLOW_BIGGER_NM == 1
+				assert(local_n <= n);
+				assert(local_m <= m);
+			#else
+				assert(local_n == n);
+				assert(local_m == m);
+			#endif
 		#else 
-			std::cin >> ::n >> ::m;
+			::n = local_n;
+			::m = local_m;
+			::nm = ::n * ::m;
 		#endif
 		
+		assert(::nm == ::n * ::m);
+
 		skipNewLine();
 		global_params_set = true;
 	}
@@ -1273,8 +1271,8 @@ GameState readInput() {
 	Vec red_player;
 	Vec blue_player;
 
-	for (i64 i = 0; i < i64(n); i++) {
-		for (i64 j = 0; j < i64(m); j++) {
+	for (i64 i = 0; i < i64(local_n); i++) {
+		for (i64 j = 0; j < i64(local_m); j++) {
 			for (u64 dummy = 0; dummy < 4; dummy++) {
 				char c;
 				std::cin >> std::noskipws >> c;
