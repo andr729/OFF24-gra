@@ -460,6 +460,14 @@ public:
 		return bullets.get(dir);
 	}
 
+	BoolLayer getFlat() const {
+		BoolLayer res = bullets.up();
+		res.getBitsetMut() |= bullets.down().getBitset();
+		res.getBitsetMut() |= bullets.left().getBitset();
+		res.getBitsetMut() |= bullets.right().getBitset();
+		return res;
+	}
+
 	void addBulletAtIndex(i64 pos, Direction dir) {
 		bullets.get(dir).atIndexMut(pos) = true;
 	}
@@ -835,15 +843,18 @@ public:
 		return ghosts;
 	}
 
-	void eliminateGhostsAt(const BoolLayer& eliminations) {
+	u64 eliminateGhostsNegative(const BoolLayer& negative_eliminations) {
 		#if BIT_SET == 1
-			ghosts.getBitsetMut() &= (~eliminations.getBitset());
+				ghosts.getBitsetMut() &= negative_eliminations.getBitset();
+				return ghosts.getBitset().count();
 		#else
-			for (i64 i = 0; i < i64(nm); i++) {
-				ghosts.atIndexMut(i) &= (!eliminations.atIndex(i));
-			}
+				assert(false); // @TODO:
+				for (i64 i = 0; i < i64(nm); i++) {
+						ghosts.atIndexMut(i) &= (!eliminations.atIndex(i));
+				}
 		#endif
 	}
+
 
 	/**
 	 * @param bullets 
@@ -1140,16 +1151,20 @@ struct GameState {
 			hero_c_bullets.moveBulletsWithWalls(walls_indices);
 			enemy_c_bullets.moveBulletsWithWalls(walls_indices);
 
+			// elim ghosts with walls (done in moveGhostsEverywhere)
+
+			// elim ghost with bullets:
+			
 			// @OPT: flatten (and negate) lookup_bullets bullets here, might be faster, as compiler might not notice it
 			// once this is done, keeping enemy_c_bullets, hero_c_bullets,
 			// without lookup_bullets might be faster as well,
 			// since there will be faster propagation (less flips)
 
-			// elim ghosts with walls (done in moveGhostsEverywhere)
+			auto flat_lookup_bullets_neg = lookup_bullets.getFlat();
+			flat_lookup_bullets_neg.getBitsetMut().flip();
 
-			// elim ghost with bullets:
-			hc_count = hero_c_ghosts.eliminateGhostsAt(lookup_bullets);
-			ec_count = enemy_c_ghosts.eliminateGhostsAt(lookup_bullets);
+			hc_count = hero_c_ghosts.eliminateGhostsNegative(flat_lookup_bullets_neg);
+			ec_count = enemy_c_ghosts.eliminateGhostsNegative(flat_lookup_bullets_neg);
 			
 			hu_count = hero_u_ghosts.eliminateGhostsAt(enemy_c_bullets);
 			eu_count = enemy_u_ghosts.eliminateGhostsAt(hero_c_bullets);
