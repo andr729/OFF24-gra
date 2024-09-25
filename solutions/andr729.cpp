@@ -521,14 +521,10 @@ public:
 				for (auto [dir, shift]: DIR_SHIFT_ARR) {
 					// here we don't care about double flips, cause
 					// flipped bullets will only be, where there are no walls!
-					bool bullet = this->getBullets(dir).atIndex(i);
-
-					// this like almost works, but can't due to lack of bound checks...:
-					// if (bullets.get(dir).atIndex(i)) [[unlikely]] {
+					if (bullets.get(dir).atIndex(i)) [[unlikely]] {
 						bullets.get(dir).atIndexMut(i) = false;
-						auto ref = bullets.get(flip(dir)).atIndexMut(i - shift);
-						ref = bool(ref) or bullet;
-					// }
+						bullets.get(flip(dir)).atIndexMut(i - shift) = true;
+					}
 				}
 			}
 
