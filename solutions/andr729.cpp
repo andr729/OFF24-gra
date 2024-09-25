@@ -415,6 +415,7 @@ public:
 		atIndexMut(posToIndex(pos)) = curr and v;
 	}
 
+	[[gnu::cold]]
 	static BoolLayer fromVec(const std::vector<Vec>& vecs) {
 		BoolLayer res;
 		for (auto vec: vecs) {
@@ -866,8 +867,8 @@ public:
 			eliminations |= bullets.getBullets(Direction::DOWN).getBitset();
 			eliminations |= bullets.getBullets(Direction::LEFT).getBitset();
 			eliminations |= bullets.getBullets(Direction::RIGHT).getBitset();
-			
-			ghosts.getBitsetMut() &= (~eliminations);
+			eliminations.flip();
+			ghosts.getBitsetMut() &= eliminations;
 
 			return ghosts.getBitset().count();
 		#else 
@@ -1155,11 +1156,13 @@ struct GameState {
 
 			// elim ghost with bullets:
 			
-			// @OPT: flatten (and negate) lookup_bullets bullets here, might be faster, as compiler might not notice it
+			// flatten (and negate) lookup_bullets bullets here, since it might be faster,
+			// as compiler might not notice it
 			// once this is done, keeping enemy_c_bullets, hero_c_bullets,
 			// without lookup_bullets might be faster as well,
 			// since there will be faster propagation (less flips)
-
+			
+			// @note: its not faster
 			auto flat_lookup_bullets_neg = lookup_bullets.getFlat();
 			flat_lookup_bullets_neg.getBitsetMut().flip();
 
