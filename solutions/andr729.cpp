@@ -10,7 +10,8 @@ namespace {
 // @note: looking at std source code, it seams that bitsets are stored in the type directly
 
 #define CONST_NM 1
-#define BIT_SET 1
+#define BIT_SET 1 // @TODO: 0 is not supported yet
+#define WEIRD_BIT_OPERATIONS 1
 #define MOVE_BULLETS_VECTOR 1
 #define NO_BOUND_CHECKS 1
 #define NO_OTHER_CHECKS 1
@@ -850,11 +851,10 @@ public:
 	 */
 	u64 eliminateGhostsAt(const BulletLayer& bullets) {
 		#if BIT_SET == 1
-			auto eliminations =
-				bullets.getBullets(Direction::UP).getBitset() |
-				bullets.getBullets(Direction::DOWN).getBitset() |
-				bullets.getBullets(Direction::LEFT).getBitset() |
-				bullets.getBullets(Direction::RIGHT).getBitset();
+			auto eliminations = bullets.getBullets(Direction::UP).getBitset();
+			eliminations |= bullets.getBullets(Direction::DOWN).getBitset();
+			eliminations |= bullets.getBullets(Direction::LEFT).getBitset();
+			eliminations |= bullets.getBullets(Direction::RIGHT).getBitset();
 			
 			ghosts.getBitsetMut() &= (~eliminations);
 
@@ -877,34 +877,39 @@ public:
 			// @note: shift by 1 only works
 			// // because we have walls on borders
 
-			// @opt: this seams a little faster:
-			// auto& ghosts_ref = ghosts.getBitsetMut();
+			// this seams a little faster:
+			#if WEIRD_BIT_OPERATIONS == 1
+				// we can do it, but only
+				// because we have walls on borders
+				
+				auto& ghosts_ref = ghosts.getBitsetMut();
+				std::bitset<nm> oper_ghosts = ghosts_ref;
+				
+				oper_ghosts <<= m;
+				ghosts_ref |= oper_ghosts;
+				
+				oper_ghosts >>= 2*m;
+				ghosts_ref |= oper_ghosts;
 
-			// std::bitset<nm> oper_ghosts = ghosts_ref;
-			
-			// oper_ghosts <<= m;
-			// ghosts_ref |= oper_ghosts;
-			
-			// oper_ghosts >>= 2*m; // we can do it, cause we have walls on borders
-			// ghosts_ref |= oper_ghosts;
+				oper_ghosts <<= m + 1;
+				ghosts_ref |= oper_ghosts;
 
-			// oper_ghosts <<= m + 1;
-			// ghosts_ref |= oper_ghosts;
+				oper_ghosts >>= 2;
+				ghosts_ref |= oper_ghosts;
 
-			// oper_ghosts >>= 2;
-			// ghosts_ref |= oper_ghosts;
+				ghosts_ref &= negative_walls.getBitset();
 
-			// ghosts_ref &= negative_walls.getBitset();
+			#else
+				std::bitset<nm> new_ghosts = ghosts.getBitset();
+				new_ghosts |= ghosts.getBitset() << m;
+				new_ghosts |= ghosts.getBitset() >> m;
+				new_ghosts |= ghosts.getBitset() << 1;
+				new_ghosts |= ghosts.getBitset() >> 1;
 
-			std::bitset<nm> new_ghosts = ghosts.getBitset();
-			new_ghosts |= ghosts.getBitset() << m;
-			new_ghosts |= ghosts.getBitset() >> m;
-			new_ghosts |= ghosts.getBitset() << 1;
-			new_ghosts |= ghosts.getBitset() >> 1;
+				new_ghosts &= negative_walls.getBitset();
 
-			new_ghosts &= negative_walls.getBitset();
-
-			this->ghosts.getBitsetMut() = std::move(new_ghosts);
+				this->ghosts.getBitsetMut() = std::move(new_ghosts);
+			#endif
 		#else
 			// Try to avoid copy -- apparently its very similar the way it is
 			// It may be that compiler optimizes it much better
