@@ -521,11 +521,14 @@ public:
 				for (auto [dir, shift]: DIR_SHIFT_ARR) {
 					// here we don't care about double flips, cause
 					// flipped bullets will only be, where there are no walls!
-					
-					if (bullets.get(dir).atIndex(i)) [[unlikely]] {
+					bool bullet = this->getBullets(dir).atIndex(i);
+
+					// this like almost works, but can't due to lack of bound checks...:
+					// if (bullets.get(dir).atIndex(i)) [[unlikely]] {
 						bullets.get(dir).atIndexMut(i) = false;
-						bullets.get(flip(dir)).atIndexMut(i - shift) = true;
-					}
+						auto ref = bullets.get(flip(dir)).atIndexMut(i - shift);
+						ref = bool(ref) or bullet;
+					// }
 				}
 			}
 
@@ -1227,18 +1230,21 @@ namespace alpha_beta {
 
 	// this does note speed stuff up, cause bitsets lay on stack anyway:
 	static inline ABGameState static_states[conf::AB_DEPTH * 2 + 2];
-
-	template<bool INITIAL, bool IS_HERO_TURN>
+	
+	// @note making IS_HERO_TURN non template might increase code locality
+	// g++ does not inline moveBulletsWithWalls, when it is non-template
+	template<bool INITIAL>
 	auto alphaBeta(
 		u64 remaining_depth,
 		u64 state_depth,
 		PositionEvaluation alpha,
-		PositionEvaluation beta)
+		PositionEvaluation beta,
+		bool IS_HERO_TURN)
 	-> ABRetType<INITIAL>::type	{
 
 		const auto& state = static_states[state_depth];
 		
-		static_assert(implies(INITIAL, IS_HERO_TURN), "Initial call should be hero turn");
+		// static_assert(implies(INITIAL, IS_HERO_TURN), "Initial call should be hero turn");
 		
 		// @opt: for now we just pass copies of the state, but
 		// in the future we should pass references to the state
@@ -1247,7 +1253,7 @@ namespace alpha_beta {
 
 		const u64 next_remaining_depth = IS_HERO_TURN ? remaining_depth : remaining_depth - 1;
 
-		if constexpr (IS_HERO_TURN) {
+		if (IS_HERO_TURN) {
 			if (remaining_depth == 0 or state.state.isTerminal()) [[unlikely]] {
 				if constexpr (INITIAL) {
 					assert(false); // static_assertion fails hare
@@ -1259,7 +1265,7 @@ namespace alpha_beta {
 			}
 		}
 
-		if constexpr (IS_HERO_TURN) {
+		if (IS_HERO_TURN) {
 			PositionEvaluation value = PositionEvaluation::losing();
 			Move best_move = Move::WAIT;
 
@@ -1270,11 +1276,12 @@ namespace alpha_beta {
 				auto& new_state = static_states[state_depth];
 				new_state.hero_move_commit = move;
 
-				auto move_value = alphaBeta<false, not IS_HERO_TURN>(
+				auto move_value = alphaBeta<false>(
 					next_remaining_depth,
 					state_depth,
 					alpha,
-					beta
+					beta,
+					not IS_HERO_TURN
 				);
 
 				if (move_value > value) {
@@ -1300,7 +1307,7 @@ namespace alpha_beta {
 			}
 		}
 		else {
-			static_assert(not INITIAL, "Enemy move should not be a initial position");
+			// static_assert(not INITIAL, "Enemy move should not be a initial position");
 
 			PositionEvaluation value = PositionEvaluation::wining();
 
@@ -1326,11 +1333,12 @@ namespace alpha_beta {
 
 				new_state.state.applyMove(hero_move, enemy_move);
 
-				auto move_value = alphaBeta<false, not IS_HERO_TURN>(
+				auto move_value = alphaBeta<false>(
 					next_remaining_depth,
 					state_depth + 1,
 					alpha,
-					beta
+					beta,
+					not IS_HERO_TURN
 				);
 
 				value = std::min(value, move_value);
@@ -1345,7 +1353,12 @@ namespace alpha_beta {
 				beta = std::min(beta, value);
 			}
 
-			return value;
+			if constexpr (INITIAL) {
+				assert(false); // static_assertion fails hare
+			}
+			else {
+				return value;
+			}
 		}
 	}
 }
@@ -1355,11 +1368,12 @@ Move findBestHeroMove(GameState state) {
 	ABGameState ab_state = {std::move(state), std::nullopt};
 	alpha_beta::static_states[0] = std::move(ab_state);
 
-	auto res = alpha_beta::alphaBeta<true, true>(
+	auto res = alpha_beta::alphaBeta<true>(
 		conf::AB_DEPTH,
 		0,
 		PositionEvaluation::losing(),
-		PositionEvaluation::wining()
+		PositionEvaluation::wining(),
+		true
 	);
 
 	res.second.debugPrint();
