@@ -7,6 +7,8 @@
 
 namespace {
 
+// @note: looking at std source code, it seams that bitsets are stored in the type directly
+
 #define CONST_NM 1
 #define BIT_SET 1
 #define MOVE_BULLETS_VECTOR 1
@@ -23,7 +25,7 @@ using i32 = int32_t;
 namespace conf {
 	// note: we want to optimize it so we have 12/3 here
 	constexpr u64 MAX_ROUND_LOOKUP = 8;
-	constexpr u64 AB_DEPTH = 3;
+	constexpr u64 AB_DEPTH = 4;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;
@@ -34,8 +36,8 @@ namespace conf {
 	// Those values are arbitrary for now:
 	constexpr double HERO_C_COEFF  = 8.0;
 	constexpr double HERO_U_COEFF  = 1.0;
-	constexpr double ENEMY_U_COEFF = -1.0;
 	constexpr double ENEMY_C_COEFF = -8.0;
+	constexpr double ENEMY_U_COEFF = -1.0;
 }
 
 /*******************/
@@ -488,7 +490,7 @@ public:
 		assert(false);
 	}
 
-	void moveBulletsWithWalls(const BoolLayer& walls) {
+	void moveBulletsWithWalls(const std::vector<i64>& walls_indices) {
 		#if (BIT_SET == 1) and (MOVE_BULLETS_VECTOR == 1)
 			// @TODO: -m/+m/-1/+1 are duplicated here:
 			constexpr static std::array<std::pair<Direction, i64>, 4> DIR_SHIFT_ARR = {
@@ -505,12 +507,12 @@ public:
 			this->getBulletsMut(Direction::RIGHT).getBitsetMut() <<= 1;
 			
 			// flip them:	
-			for (i64 i = 0; i < i64(nm); i++) {
+			for (i64 i: walls_indices) {
 				for (auto [dir, shift]: DIR_SHIFT_ARR) {
 					// here we don't care about double flips, cause
 					// flipped bullets will only be, where there are no walls!
 					
-					if (walls.atIndex(i) and bullets.get(dir).atIndex(i)) [[unlikely]] {
+					if (bullets.get(dir).atIndex(i)) [[unlikely]] {
 						bullets.get(dir).atIndexMut(i) = false;
 						bullets.get(flip(dir)).atIndexMut(i - shift) = true;
 					}
@@ -520,6 +522,7 @@ public:
 			// no assign, we do it inp place
 
 		#else
+			#error No wall indicies support (yet) for no bitset
 			// ideally we want to do it inplace for performance..
 			// for now we ignore it
 			BulletLayer new_bullets;
@@ -687,8 +690,8 @@ public:
 		return 
 			conf::HERO_C_COEFF  * hero_conditional.doubleScore() +
 			conf::HERO_U_COEFF  * hero_unconditional.doubleScore() +
-			conf::ENEMY_U_COEFF * enemy_unconditional.doubleScore() +
-			conf::ENEMY_C_COEFF * enemy_conditional.doubleScore();
+			conf::ENEMY_C_COEFF * enemy_conditional.doubleScore() +
+			conf::ENEMY_U_COEFF * enemy_unconditional.doubleScore();
 	}
 
 	/**
@@ -868,14 +871,30 @@ public:
 	}
 
 	void moveGhostsEverywhere(const BoolLayer& negative_walls) {
-		// @todo: no bound checks here -- should not be needed
-
-		// Try to avoid copy -- apparently its very similar the way it is
-		// It may be that compiler optimizes it much better
+		// @note: no bound checks here -- should not be needed
 
 		#if BIT_SET == 1
 			// @note: shift by 1 only works
-			// because we have walls on borders
+			// // because we have walls on borders
+
+			// @opt: this seams a little faster:
+			// auto& ghosts_ref = ghosts.getBitsetMut();
+
+			// std::bitset<nm> oper_ghosts = ghosts_ref;
+			
+			// oper_ghosts <<= m;
+			// ghosts_ref |= oper_ghosts;
+			
+			// oper_ghosts >>= 2*m; // we can do it, cause we have walls on borders
+			// ghosts_ref |= oper_ghosts;
+
+			// oper_ghosts <<= m + 1;
+			// ghosts_ref |= oper_ghosts;
+
+			// oper_ghosts >>= 2;
+			// ghosts_ref |= oper_ghosts;
+
+			// ghosts_ref &= negative_walls.getBitset();
 
 			std::bitset<nm> new_ghosts = ghosts.getBitset();
 			new_ghosts |= ghosts.getBitset() << m;
@@ -887,6 +906,8 @@ public:
 
 			this->ghosts.getBitsetMut() = std::move(new_ghosts);
 		#else
+			// Try to avoid copy -- apparently its very similar the way it is
+			// It may be that compiler optimizes it much better
 			BoolLayer new_ghosts = ghosts;
 
 			for (i64 i = 0; i < i64(nm); i++) {
@@ -929,6 +950,8 @@ public:
 struct GameState {
 	#if STATIC_WALLS == 1
 		static inline BoolLayer walls;
+		static inline BoolLayer negative_walls;
+		static inline std::vector<i64> walls_indices;
 	#else
 		BoolLayer walls;
 	#endif
@@ -937,7 +960,7 @@ struct GameState {
 	PlayerPositions players;
 	
 	void moveBullets() {
-		bullets.moveBulletsWithWalls(walls);
+		bullets.moveBulletsWithWalls(walls_indices);
 	}
 
 	[[gnu::cold]]
@@ -1068,9 +1091,6 @@ struct GameState {
 		// no hero hit
 		// no enemy hit
 
-		// @opt: this can be made static:
-		BoolLayer negative_walls = walls.negated();
-
 		SurvivalData hero_u;
 		SurvivalData hero_c;
 		SurvivalData enemy_u;
@@ -1111,9 +1131,9 @@ struct GameState {
 			enemy_u_ghosts.moveGhostsEverywhere(negative_walls);
 
 			// move bullets:
-			lookup_bullets.moveBulletsWithWalls(walls);
-			hero_c_bullets.moveBulletsWithWalls(walls);
-			enemy_c_bullets.moveBulletsWithWalls(walls);
+			lookup_bullets.moveBulletsWithWalls(walls_indices);
+			hero_c_bullets.moveBulletsWithWalls(walls_indices);
+			enemy_c_bullets.moveBulletsWithWalls(walls_indices);
 
 			// @OPT: flatten (and negate) lookup_bullets bullets here, might be faster, as compiler might not notice it
 			// once this is done, keeping enemy_c_bullets, hero_c_bullets,
@@ -1182,6 +1202,7 @@ namespace alpha_beta {
 
 	constinit static u64 leaf_counter = 0;
 
+	// this does note speed stuff up, cause bitsets lay on stack anyway:
 	static inline ABGameState static_states[conf::AB_DEPTH * 2 + 2];
 
 	template<bool INITIAL, bool IS_HERO_TURN>
@@ -1426,6 +1447,12 @@ GameState readInput() {
 
 	#if STATIC_WALLS == 1
 		GameState::walls = BoolLayer::fromVec(walls);
+		GameState::negative_walls = GameState::walls.negated();
+		for (u64 i = 0; i < nm; i++) {
+			if (GameState::walls.atIndex(i)) {
+				GameState::walls_indices.push_back(i);
+			}
+		}
 	#endif
 
 	return game_state;
@@ -1486,7 +1513,9 @@ void ghostTest(GameState game_state) {
 
 		// move:
 		ghosts.moveGhostsEverywhere(walls);
-		bullets.moveBulletsWithWalls(walls);
+		assert(false);
+		// not implemented:
+		// bullets.moveBulletsWithWalls(walls);
 
 		// eliminations:
 		ghosts.eliminateGhostsAt(bullets);
