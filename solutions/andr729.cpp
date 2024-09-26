@@ -24,9 +24,15 @@ using i64 = int64_t;
 using i32 = int32_t;
 
 namespace conf {
+	#ifndef MAX_ROUND_LOOKUP_PARAM
+		#define MAX_ROUND_LOOKUP_PARAM 4
+	#endif
+	#ifndef AB_DEPTH_PARAM
+		#define AB_DEPTH_PARAM 4
+	#endif
 	// note: we want to optimize it so we have 12/3 here
-	constexpr u64 MAX_ROUND_LOOKUP = 8;
-	constexpr u64 AB_DEPTH = 4;
+	constexpr u64 MAX_ROUND_LOOKUP = MAX_ROUND_LOOKUP_PARAM;
+	constexpr u64 AB_DEPTH = AB_DEPTH_PARAM;
 
 	// round vs ghost count
 	constexpr double ROUND_COEFF = 1024.0;
