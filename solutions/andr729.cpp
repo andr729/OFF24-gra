@@ -25,10 +25,10 @@ using i32 = int32_t;
 
 namespace conf {
 	#ifndef MAX_ROUND_LOOKUP_PARAM
-		#define MAX_ROUND_LOOKUP_PARAM 12
+		#define MAX_ROUND_LOOKUP_PARAM 4
 	#endif
 	#ifndef AB_DEPTH_PARAM
-		#define AB_DEPTH_PARAM 3
+		#define AB_DEPTH_PARAM 4
 	#endif
 	// note: we want to optimize it so we have 12/3 here
 	constexpr u64 MAX_ROUND_LOOKUP = MAX_ROUND_LOOKUP_PARAM;
@@ -1233,6 +1233,8 @@ namespace alpha_beta {
 
 	// this does note speed stuff up, cause bitsets lay on stack anyway:
 	static inline ABGameState static_states[conf::AB_DEPTH * 2 + 2];
+	
+	// @OPT: https://en.wikipedia.org/wiki/Killer_heuristic
 
 	constexpr static std::array<Move, 9> HERO_MOVE_ORDER = {
 		Move::WAIT,
