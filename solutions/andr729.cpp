@@ -1113,10 +1113,10 @@ struct GameState {
 		// no hero hit
 		// no enemy hit
 
-		SurvivalData hero_u;
-		SurvivalData hero_c;
-		SurvivalData enemy_u;
-		SurvivalData enemy_c;
+		SurvivalData hero_u{0, 1};
+		SurvivalData hero_c{0, 1};
+		SurvivalData enemy_u{0, 1};
+		SurvivalData enemy_c{0, 1};
 
 		auto lookup_bullets = this->bullets;
 
