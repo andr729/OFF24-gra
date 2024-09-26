@@ -25,10 +25,10 @@ using i32 = int32_t;
 
 namespace conf {
 	#ifndef MAX_ROUND_LOOKUP_PARAM
-		#define MAX_ROUND_LOOKUP_PARAM 4
+		#define MAX_ROUND_LOOKUP_PARAM 12
 	#endif
 	#ifndef AB_DEPTH_PARAM
-		#define AB_DEPTH_PARAM 4
+		#define AB_DEPTH_PARAM 3
 	#endif
 	// note: we want to optimize it so we have 12/3 here
 	constexpr u64 MAX_ROUND_LOOKUP = MAX_ROUND_LOOKUP_PARAM;
@@ -696,11 +696,11 @@ public:
 	 * @todo: double vs i64
 	 */
 	double getDoubleScore() const {
-		if (isDraw()) {
-			return
-				(conf::HERO_C_COEFF + conf::HERO_U_COEFF +
-				 conf::ENEMY_C_COEFF + conf::ENEMY_U_COEFF) * conf::TIE_COEFF; 
-		}
+		// if (isDraw()) {
+			// return
+			// 	(conf::HERO_C_COEFF + conf::HERO_U_COEFF +
+			// 	 conf::ENEMY_C_COEFF + conf::ENEMY_U_COEFF) * conf::TIE_COEFF; 
+		// }
 
 		return 
 			conf::HERO_C_COEFF  * hero_conditional.doubleScore() +
@@ -1229,9 +1229,34 @@ namespace alpha_beta {
 
 
 	constinit static u64 leaf_counter = 0;
+	constinit static u64 node_counter = 0;
 
 	// this does note speed stuff up, cause bitsets lay on stack anyway:
 	static inline ABGameState static_states[conf::AB_DEPTH * 2 + 2];
+
+	constexpr static std::array<Move, 9> HERO_MOVE_ORDER = {
+		Move::WAIT,
+		Move::GO_UP,
+		Move::GO_DOWN,
+		Move::GO_LEFT,
+		Move::GO_RIGHT,
+		Move::SHOOT_UP,
+		Move::SHOOT_DOWN,
+		Move::SHOOT_LEFT,
+		Move::SHOOT_RIGHT
+	};
+
+	constexpr static std::array<Move, 9> ENEMY_MOVE_ORDER = {
+		Move::WAIT,
+		Move::GO_UP,
+		Move::GO_DOWN,
+		Move::GO_LEFT,
+		Move::GO_RIGHT,
+		Move::SHOOT_UP,
+		Move::SHOOT_DOWN,
+		Move::SHOOT_LEFT,
+		Move::SHOOT_RIGHT
+	};
 	
 	// @note making IS_HERO_TURN non template might increase code locality
 	// g++ does not inline moveBulletsWithWalls, when it is non-template
@@ -1267,11 +1292,13 @@ namespace alpha_beta {
 			}
 		}
 
+		node_counter++;
+
 		if (IS_HERO_TURN) {
 			PositionEvaluation value = PositionEvaluation::losing();
 			Move best_move = Move::WAIT;
 
-			for (auto move: MOVE_ARRAY)
+			for (auto move: HERO_MOVE_ORDER)
 			if (state.state.isMoveSensible(move, Player::HERO)) {
 
 				// @note: notice we operate on the same state here:
@@ -1313,7 +1340,7 @@ namespace alpha_beta {
 
 			PositionEvaluation value = PositionEvaluation::wining();
 
-			for (auto move: MOVE_ARRAY)
+			for (auto move: ENEMY_MOVE_ORDER)
 			if (state.state.isMoveSensible(move, Player::ENEMY)) {
 
 				// @opt
@@ -1380,6 +1407,7 @@ Move findBestHeroMove(GameState state) {
 
 	res.second.debugPrint();
 	std::cerr << "leafs: " << alpha_beta::leaf_counter << "\n";
+	std::cerr << "nodes: " << alpha_beta::node_counter << "\n";
 
 	return res.first;
 }
