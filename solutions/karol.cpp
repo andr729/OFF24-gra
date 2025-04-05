@@ -1,5 +1,3 @@
-// Author: Karol
-
 #include <bits/stdc++.h>
 using namespace std;
 #define all(x) x.begin(), x.end()
@@ -12,7 +10,7 @@ using pii = pair<int, int>;
 using pid = pair<int, double>;
 const long timeout = 140 * 1000;
 const int max_round_num = 400;
-int max_depth = 35;
+int max_depth = 100;
 
 long microseconds()
 {
@@ -163,7 +161,7 @@ struct GameState
         return next;
     }
 
-    pair<vector<int>, vector<int>> get_not_stupid_moves()
+    pair<vector<int>, vector<int>> get_nonlethal_moves()
     {
         move_bullets();
 
@@ -213,15 +211,17 @@ struct GameState
 
         return {a, b};
     }
-    pair<int, int> get_random_not_stupid_move()
+    pair<int, int> get_random_nonlethat_move()
     {
-        auto [a, b] = get_not_stupid_moves();
+        auto [a, b] = get_nonlethal_moves();
         return {a[ran() % len(a)], b[ran() % len(b)]};
     }
 
     void read_board()
     {
+        stringstream o;
         cin >> n >> m;
+        o << n << " " << m << "\n";
         char c;
         char P;
 
@@ -231,6 +231,7 @@ struct GameState
             for (int j = 0; j < 4 * m; j++)
             {
                 ignore = scanf("%c", &c);
+                o << c;
                 if (c == '#')
                     board[i][j / 4] = '#';
                 else if (c == ' ' && board[i][j / 4] == 0)
@@ -249,15 +250,52 @@ struct GameState
                     add_bullet(Bullet{pii{i, j / 4}, 3});
             }
             ignore = scanf("\n");
+            o << "\n";
         }
 
         cin >> round_num;
+        o << round_num << "\n";
         start_round = round_num;
 
         cin >> P;
         player_color = P;
+        mt19937 ran(microseconds());
         if (P == 'B')
+        {
             swap(b_pos, r_pos);
+        }
+        else if (round_num > 20 and ran() % 30 == 0)
+        {
+            ofstream file("current_game/round_" + to_string(round_num) + "_" + to_string(microseconds() % 1'000'000) + ".in");
+            file << o.str();
+        }
+    }
+
+    double kmonte_carlo_eval(int r, int d) const
+    {
+        double res = 0;
+        for (int k = 0; k < r; k++)
+        {
+            GameState monte = *this;
+
+            for (int j = 0; j < d && monte.round_num <= max_round_num; j++)
+            {
+                auto [m1, m2] = monte.get_random_nonlethat_move();
+                monte.move_players(m1, m2);
+
+                if (monte.r_killed && monte.b_killed)
+                    res += 0.5;
+                else if (monte.r_killed)
+                    res += 0;
+                else if (monte.b_killed)
+                    res += 1;
+
+                if (monte.r_killed || monte.b_killed)
+                    break;
+            }
+        }
+
+        return res / r;
     }
 };
 
@@ -276,29 +314,30 @@ string input_line;
 uint64_t start_time;
 int get_move(GameState state)
 {
-    vector<int> move_eval(9, -1e6);
+    vector<double> move_eval(9, -3.0);
 
     GameState check = state;
-    vector<int> not_stupid = check.get_not_stupid_moves().x;
-    for (auto ns : not_stupid)
+    vector<int> nonlethal = check.get_nonlethal_moves().x;
+    for (auto ns : nonlethal)
     {
-        move_eval[ns] += 1e6;
+        move_eval[ns] = 0.0;
     }
 
-    for (int k = 0; k < 1e6; k++)
+    int k = 0;
+    for (; k < 1e6; k++)
     {
         if (start_time + timeout < microseconds())
         {
             // cerr << "3: " << k << "\n";
             break;
         }
-        for (auto i : not_stupid)
+        for (auto i : nonlethal)
         {
             GameState monte = state;
             int p_move = i;
-            int e_move = monte.get_random_not_stupid_move().second;
+            int e_move = monte.get_random_nonlethat_move().second;
 
-            for (int j = 0; j < 23 && monte.round_num <= max_round_num; j++)
+            for (int j = 0; j < 64 && monte.round_num <= max_round_num; j++)
             {
                 monte.move_players(p_move, e_move);
                 if (monte.r_killed == 1)
@@ -306,19 +345,21 @@ int get_move(GameState state)
                 if (monte.b_killed == 1)
                     move_eval[i] += 1;
 
-                if (monte.r_killed || monte.r_killed)
+                if (monte.r_killed || monte.b_killed)
                     break;
 
-                auto [m1, m2] = monte.get_random_not_stupid_move();
+                auto [m1, m2] = monte.get_random_nonlethat_move();
                 p_move = m1;
                 e_move = m2;
             }
         }
     }
+    for (auto &m : move_eval)
+        m /= k;
 
-    int opt = -1e9;
+    double opt = -1.0;
     vector<int> move;
-    for (int i = 0; i < 9; i++)
+    for (auto i : nonlethal)
     {
         if (opt == move_eval[i])
         {
@@ -348,7 +389,7 @@ int main()
 
     game.read_board();
     preprocess_bullets(game);
-    for(auto &b : game.has_bullet)
+    for (auto &b : game.has_bullet)
         b.fill(0);
     game.bullets.clear();
 
